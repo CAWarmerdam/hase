@@ -111,6 +111,7 @@ if __name__=='__main__':
 	###CLUSTER SETTING
 	parser.add_argument('-cluster', type=str, default='n', choices=['y','n'], help=' Is it parallel cluster job, default no')
 	parser.add_argument('-node', nargs='+',type=int,help='number of nodes / this node number, example: 10 2 ')
+	parser.add_argument('-cluster_parameters', type=str, help='Pass extra cluster specific setting to jobs submission')
 	###
 
 	#ADVANCED SETTINGS
@@ -150,6 +151,7 @@ if __name__=='__main__':
 				G=GenotypeMINIMAC(args.study_name[0],reader=R)
 				if args.cluster=='y':
 					G.cluster=True
+					G.cluster_parameters=args.cluster_parameters
 				G.split_size=CONVERTER_SPLIT_SIZE
 				G.MACH2hdf5(args.out,id=args.id)
 
@@ -157,6 +159,7 @@ if __name__=='__main__':
 				G = GenotypeVCF(args.study_name[0], reader=R)
 				if args.cluster=='y':
 					G.cluster=True
+					G.cluster_parameters = args.cluster_parameters
 				G.split_size=CONVERTER_SPLIT_SIZE
 				G.VCF2hdf5(args.out)
 			else:

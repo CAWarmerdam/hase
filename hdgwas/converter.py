@@ -187,6 +187,7 @@ class GenotypeMINIMAC(object):
 		self.hdf5_iter=0
 		self.pytable_filter=tables.Filters(complevel=9, complib='zlib')
 		self.cluster=False
+		self.cluster_patameters=""
 
 	def save_hdf5_chunk(self,data,out,name):
 		print 'Saving chunk...{}'.format(os.path.join(out,'genotype',str(self.hdf5_iter)+'_'+name+'.h5'))
@@ -215,7 +216,7 @@ class GenotypeMINIMAC(object):
 				ind=pd.read_hdf(os.path.join(out,'individuals',self.study_name+'.h5'),'individuals').individual
 				N=ind.shape[0]
 				print 'Submit to cluster!'
-				cmd="qsub -sync y -t 1-{} {} {}".format(N,os.path.join(os.environ['HASEDIR'],'tools','qsub_helper.sh'),os.path.join( out,'id_convert.sh' ))
+				cmd="qsub {} -sync y -t 1-{} {} {}".format(self.cluster_patameters,N,os.path.join(os.environ['HASEDIR'],'tools','qsub_helper.sh'),os.path.join( out,'id_convert.sh' ))
 				print cmd
 				proc=subprocess.Popen(cmd, shell=True,stderr=subprocess.STDOUT,stdout=subprocess.PIPE).communicate()
 			else:
@@ -286,7 +287,7 @@ class GenotypeMINIMAC(object):
 			f.close()
 			if self.cluster:
 				print 'Submit to cluster!'
-				cmd="qsub -sync y -t 1-{} {} {}".format(N_jobs,os.path.join(os.environ['HASEDIR'],'tools','qsub_helper.sh'),os.path.join( out,'minimac_convert.sh' ))
+				cmd="qsub {} -sync y -t 1-{} {} {}".format(self.cluster_patameters,N_jobs,os.path.join(os.environ['HASEDIR'],'tools','qsub_helper.sh'),os.path.join( out,'minimac_convert.sh' ))
 				print cmd
 				proc=subprocess.Popen(cmd, shell=True,stderr=subprocess.STDOUT,stdout=subprocess.PIPE).communicate()
 			else:
@@ -313,6 +314,8 @@ class GenotypeVCF(object):
 		self.hdf5_iter=0
 		self.pytable_filter=tables.Filters(complevel=9, complib='zlib')
 		self.cluster=False
+		self.cluster_patameters = ""
+
 
 	def VCF2hdf5(self, out):
 
@@ -361,7 +364,7 @@ class GenotypeVCF(object):
 		f.close()
 		if self.cluster:
 			print 'Submit to cluster!'
-			cmd="qsub -sync y -t 1-{} {} {}".format(N_jobs,os.path.join(os.environ['HASEDIR'],'tools','qsub_helper.sh'),os.path.join( out,'vcf_convert.sh' ))
+			cmd="qsub {} -sync y -t 1-{} {} {}".format(self.cluster_patameters,N_jobs,os.path.join(os.environ['HASEDIR'],'tools','qsub_helper.sh'),os.path.join( out,'vcf_convert.sh' ))
 			print cmd
 			proc=subprocess.Popen(cmd, shell=True,stderr=subprocess.STDOUT,stdout=subprocess.PIPE).communicate()
 		else:

@@ -13,6 +13,7 @@ get_minimac_chunk(){
     echo "***"
     iter=0
     file_ind=0
+    REAL_TAB=$(echo -e "\t")
     for i in $( cat ${SAVE_DIR}/files_order.txt | awk '{print $1}' ); do
 
         file=`ls ${GENOTYPE_DIR} | grep ${i}.dose`
@@ -31,12 +32,12 @@ get_minimac_chunk(){
                 END=$(( $2 - ${iter} + ${SNPs} + 1  ))
                 echo ${iter},${SNPs},${BEGIN},${END}
                 if [ -f ${SAVE_DIR}/chunk_${START}_${FINISH}.txt ]; then
-                paste ${SAVE_DIR}/chunk_${START}_${FINISH}.txt <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2 | sed 's/,/ /g' | cut -f${BEGIN}-${END}  ) > ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt
+                paste ${SAVE_DIR}/chunk_${START}_${FINISH}.txt <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2 | sed "s/,/${REAL_TAB}/g" | cut -f${BEGIN}-${END}  ) > ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt
                 rm ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
                 mv ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
                 rm ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt
                 else
-                    cut -f${BEGIN}-${END}  <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2 | sed 's/,/ /g' )  >> ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
+                    cut -f${BEGIN}-${END}  <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2 | sed "s/,/${REAL_TAB}/g" )  >> ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
                 fi
             return 0
             else
@@ -44,12 +45,12 @@ get_minimac_chunk(){
                 END=$(( 1 + $SNPs  ))
                 echo ${iter},${SNPs},${BEGIN},${END}
                 if [ -f ${SAVE_DIR}/chunk_${START}_${FINISH}.txt ]; then
-                     paste ${SAVE_DIR}/chunk_${START}_${FINISH}.txt <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2  | sed 's/,/ /g'  | cut -f${BEGIN}-${END}  ) > ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt
+                     paste ${SAVE_DIR}/chunk_${START}_${FINISH}.txt <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2  | sed "s/,/${REAL_TAB}/g"  | cut -f${BEGIN}-${END}  ) > ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt
                      rm ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
                      mv ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
                      rm ${SAVE_DIR}/tmp_chunk_${START}_${FINISH}.txt
                 else
-                    cut -f${BEGIN}-${END}  <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2 |  sed 's/,/ /g' )   >> ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
+                    cut -f${BEGIN}-${END}  <( zcat -f ${GENOTYPE_DIR}/${file} | tail -n+2 |  sed "s/,/${REAL_TAB}/g" )   >> ${SAVE_DIR}/chunk_${START}_${FINISH}.txt
                 fi
                 get_minimac_chunk $(($iter + 1)) ${2}
                 return 0

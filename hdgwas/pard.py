@@ -89,10 +89,15 @@ def partial_derivatives(save_path=None,COV=None,PHEN=None, GEN=None,
                     np.save(os.path.join(save_path,study_name+'_b_cov.npy'),b_cov)
                     np.save(os.path.join(save_path,study_name+'_C.npy'),C)
                     break
-
-                metadata['phenotype']=metadata['phenotype']+ list(PHEN.folder._data.get_names())
+                # Moved to commented line below the outside of this while loop as the names
+                # are not sliced like the 'PHEN.get_next(...)' does for phenotype.
+                # This solves an exception being thrown when a larger number of samples is used. (> 1000)
+                # metadata['phenotype'] = metadata['phenotype'] + list(PHEN.folder._data.get_names())
                 b_cov.append(B_covariates(covariates,phenotype,intercept=intercept))
                 C.append(C_matrix(phenotype))
+
+            # Moved from the while loop above to fix bug. See ^^^ for more.
+            metadata['phenotype'] = metadata['phenotype'] + list(PHEN.folder._data.get_names())
 
         print ('Time to PD phenotype {} is {} s'.format(np.array(C).shape, t_phen.secs))
 

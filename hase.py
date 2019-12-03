@@ -91,7 +91,12 @@ if __name__=='__main__':
 	#parser.add_argument("-cov_name_inc", type=str, help="path to file with covariates names to include to analysis")#TODO (low)
 	#parser.add_argument("-cov_name_exc", type=str, help="path to file with covariates names to exclude from analysis")#TODO (low)
 
-	parser.add_argument('-intercept', type=str, default='y', choices=['y','n'], help='include intercept to regression, default yes')
+	parser.add_argument('-intercept',
+						type=lambda i: i.lower() in ['y', 'yes'],
+						default=True,
+						help='include intercept to regression, default True {y(es)/...}')
+
+	# parser.add_argument('-intercept', type=str, default='y', choices=['y','n'], help='include intercept to regression, default yes')
 
 	parser.add_argument('-maf', type=float, default=0.0, help='MAF for genetics data')
 

@@ -32,6 +32,13 @@ class Encoder(object):
 
 	def matrix(self,N, save=False):
 
+		# Use cryptographic level randomness made available through the PyCryptodome Python package,
+		# instead of the numpy.random library, which is completely deterministic.
+		# self.F = np.matrix(
+		# 	[crandom.randint(1, 9) for i in range(N * N)]).reshape(N, N)
+		# Use 9 instead of 10 as the upper bound as this value is inclusive for PyCryptodome,
+		# and exclusive for numpy.random.randint().
+
 		self.F=np.random.randint(1,10,N*N).reshape(N,N)
 		self.F_inv=np.linalg.inv(self.F)
 		self.F=np.array(self.F,dtype=np.float)

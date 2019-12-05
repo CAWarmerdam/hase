@@ -100,7 +100,7 @@ if __name__=='__main__':
 
 	parser.add_argument('-maf', type=float, default=0.0, help='MAF for genetics data')
 
-	parser.add_argument('-encoded', nargs='+', type=int, help='Value per every study, 1 - if encoded, 0 - if not')
+	parser.add_argument('-encoded', nargs='+', type=int, help='Value per every study, 1 - if encoded, 0 - if not') # Option not documented
 	###
 
 	#FLAGS
@@ -287,24 +287,24 @@ if __name__=='__main__':
 		mapper=Mapper()
 		mapper.chunk_size=MAPPER_CHUNK_SIZE
 		mapper.genotype_names=args.study_name
-		mapper.reference_name=args.ref_name
-		if args.snp_id_inc is not None:
+		mapper.reference_name=args.ref_name # Reference dataset
+		if args.snp_id_inc is not None: # If this is not none the argument contains a table of snps to include
 			mapper.include = pd.DataFrame.from_csv(args.snp_id_inc, index_col=None)
 			print 'Include:'
 			print mapper.include.head()
 			if 'ID' not in mapper.include.columns and (
 					'CHR' not in mapper.include.columns or 'bp' not in mapper.include.columns):
 				raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_inc))
-		if args.snp_id_exc is not None:
+		if args.snp_id_exc is not None: # If this is not None the argument contains a table of snps to exclude
 			mapper.exclude = pd.DataFrame.from_csv(args.snp_id_exc, index_col=None)
 			print 'Exclude:'
 			print mapper.exclude.head()
 			if 'ID' not in mapper.exclude.columns and (
 					'CHR' not in mapper.exclude.columns or 'bp' not in mapper.exclude.columns):
 				raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_exc))
-		mapper.load(args.mapper)
-		mapper.load_flip(args.mapper, encode=args.encoded)
-		mapper.cluster=args.cluster
+		mapper.load(args.mapper) # Load the mapper files
+		mapper.load_flip(args.mapper, encode=args.encoded) # often args.encoded is is null
+		mapper.cluster=args.cluster # Is n by default
 		mapper.node=args.node
 
 		Analyser=HaseAnalyser()

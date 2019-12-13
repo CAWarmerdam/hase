@@ -730,7 +730,17 @@ class Reference(object):
 ########################################################################
 
 def study_indexes( args=None, genotype=None,phenotype=None,covariates=None):
-
+	"""
+	Method that matches sample identifiers between genotype, phenotype and
+	covariates datasets.
+	:param args: Maybe supposed to be the HASE output path? Currently does not do a whole lot.
+	:param genotype: The genotype data (gen.folder._data)
+	:param phenotype: The phenotype data (phen.folder._data)
+	:param covariates: The covariate data
+	:return: A list with, for every dataset, the indices of common indices in
+	the corresponding dataset.
+	And, the common ids.
+	"""
 	def _get_id(notype):
 		if isinstance(notype,type(None)):
 			id_p=np.array([],dtype=np.str)

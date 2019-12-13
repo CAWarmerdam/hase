@@ -63,10 +63,12 @@ class Encoder(object):
 		if isinstance(data_type,type(None)):
 			raise ValueError('data_type is None')
 		elif data_type=="genotype":
-			print ('Decoding genotype')
+			# If the data is genotype data, encode using F
+			print ('Encoding genotype')
 			return np.dot(data,self.F)
 		elif data_type=='phenotype':
-			print ('Decoding phenotype')
+			# If the data is phenotype data, encode using the inverse of F.
+			print ('Encoding phenotype')
 			return np.dot(self.F_inv,data)
 
 

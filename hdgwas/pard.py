@@ -50,7 +50,7 @@ def merge_PD(path, max_node, study_name):
 def partial_derivatives(save_path=None,COV=None,PHEN=None, GEN=None,
                         MAP=None, MAF=None, R2=None, B4_flag=False, study_name=None,intercept=True):
 
-    row_index, ids =  study_indexes(phenotype=PHEN.folder._data,genotype=GEN.folder._data,covariates=COV.folder._data)
+    row_index, ids = study_indexes(phenotype=PHEN.folder._data,genotype=GEN.folder._data,covariates=COV.folder._data)
 
     metadata={}
 
@@ -67,7 +67,7 @@ def partial_derivatives(save_path=None,COV=None,PHEN=None, GEN=None,
     a_test=[]
     b4=[]
 
-    covariates=COV.get_next(index=row_index[2])
+    covariates=COV.get_next(index=row_index[2]) # Does this only support covariate files up to the max chunk size?
 
     if MAP.cluster == 'n' or MAP.node[1] == 1:
         if intercept:

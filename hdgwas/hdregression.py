@@ -89,7 +89,9 @@ def calculate_variant_dependent_A(genotype, factor_matrix,
         # This creates a 2d array with columns representing the
         # variants and values representing the covariates from individuals
 
-        sec = np.array([np.dot(interaction_values[i, ...], covariate_table) for i, covariate_table in enumerate(covariates)])
+        # Calculate the A values for interaction values and other independent
+        # determinants already in covariates matrix
+        sec = calculate_dot_product_for_variants(covariates, interaction_values)
         tr = np.sum(np.power(interaction_values, 2), axis=1).reshape(-1, 1)
 
         if intercept:
@@ -103,8 +105,7 @@ def calculate_variant_dependent_A(genotype, factor_matrix,
         variable_term_index += 1
         covariates = np.dstack((covariates, interaction_values))
 
-    sec = np.array([np.dot(genotype[i, ...], covariate_table) for i, covariate_table in enumerate(covariates)])
-    print(sec)
+    # Calculate the A values for genotypes with the other independent determinants
     sec = calculate_dot_product_for_variants(covariates, genotype)
     tr = np.sum(np.power(genotype, 2), axis=1).reshape(-1, 1)
 
@@ -118,14 +119,13 @@ def calculate_variant_dependent_A(genotype, factor_matrix,
     return variant_dependent_A.T
 
 
-def calculate_dot_product_for_variants(covariates, genotype):
+def calculate_dot_product_for_variants(covariates, other_independent_determinant):
     # In the dot einsum notation, labels represent the following:
     # i: variants
     # j: individuals (dot product of genotypes, covariates)
     # k: different covariates
-    print(genotype)
-    print(covariates)
-    sec = np.einsum('ij,ijk->ik', genotype, covariates)
+    sec = np.einsum('ij,ijk->ik', other_independent_determinant, covariates)
+    # (Values get summed along individuals)
     return sec
 
 
@@ -249,9 +249,6 @@ def HASE2(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
         # constant part of B and non-constant part of B
         A1_B_full = A1_B_constant + A1_B_nonconstant
 
-        print(A1_B_full)
-        # print(B13.T)
-
         # In the einstein summation notation, the labels represent the following:
         # l: The variant axis
         # j: The the axis with the regression terms (interaction, genotype)
@@ -262,30 +259,40 @@ def HASE2(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
         # i: The variant axis
         # j: Terms
         # k: Phenotype
-        BT_A1B_nonconst = np.einsum('ijk,ijk->ijk', b_variable.transpose((1, 0, 2)), A1_B_full[:, (number_of_constant_terms):number_of_constant_terms + number_of_variable_terms, :])
+        BT_A1B_nonconst = np.einsum(
+            'ijk,ijk->ik', b_variable.transpose((1,0,2)),
+            A1_B_full[:, (number_of_constant_terms):number_of_constant_terms + number_of_variable_terms, :])
 
-        BT_A1B_full = BT_A1B_const[:, None, :] + BT_A1B_nonconst
+        # Combine the constant and nonconstant parts of the BT, beta matrix
+        BT_A1B_full = BT_A1B_const + BT_A1B_nonconst
 
-        print(BT_A1B_full)
-
+        # Get the difference between C (dot product of phenotypes) and the matrix of estimates
         C_BTA1B = BT_A1B_full - C.reshape(1, -1)
-
         C_BTA1B = np.abs(C_BTA1B)
 
-        print(C_BTA1B)
+        # Multiply the far right / lower part of every A_inv matrix
+        # (this is the part with the sum of the squares of genotype dosages),
+        # with the differences between C and the BT_A1B_full matrix
+        a44_C_BTA1B = np.einsum(
+            'il,i...->i...l', C_BTA1B,
+            a_inverse[:, variant_effect_index, (variant_effect_index):variant_effect_index+1])
 
-        a44_C_BTA1B = C_BTA1B * a_inverse[:,
-                                variant_effect_index:variant_effect_index + 1,
-                                variant_effect_index:variant_effect_index + 1]
-
+        # Square this result
         a44_C_BTA1B = np.sqrt((a44_C_BTA1B))
 
-        # print(a44_C_BTA1B)
+        # Get the t-statistics
+        t_stat = np.sqrt(DF) * np.divide(
+            A1_B_full[:, (variant_effect_index):variant_effect_index+1, :], a44_C_BTA1B)
+        # The t-statistics are stored in a 3d array with the first dimension
+        # representing the variants (main determinants to test), the second
+        # dimension being synonymous (or at least as it appears to me) to the
+        # third dimension representing phenotypes.
+        # Second dimension thus only contains one element (phenotype array)
 
-        t_stat = np.sqrt(DF) * np.divide(A1_B_full[:,
-                                         variant_effect_index:variant_effect_index + 1, :], a44_C_BTA1B)
-
+        # Get the standard error.
         SE = a44_C_BTA1B / np.sqrt(DF)
+        # Standard errors are stored in the same ways as the t-statistics:
+        # SE[variant][0][phenotype]
 
     print("time to compute GWAS for {} phenotypes and {} SNPs .... {} sec".format(b_variable.shape[1],
                                                                                   a_inverse.shape[0],

@@ -1,3 +1,4 @@
+from collections import Counter
 
 import numpy as np
 import os
@@ -13,7 +14,7 @@ class Encoder(object):
 		self.F_inv=None
 		self.encoder_chunks={}
 		self.hdf5_iter=0
-		self.npy_iter=0
+		self.npy_iter=Counter()
 		self.pytable_filters = tables.Filters(complevel=9, complib='zlib')
 		self.out=out
 		self.metadata=None
@@ -22,9 +23,10 @@ class Encoder(object):
 		self.phen_info_dic['id']=None
 		try:
 			print ('Creating directories...')
-			os.mkdir(os.path.join(self.out,'encode_genotype') )
-			os.mkdir(os.path.join(self.out,'encode_phenotype') )
+			os.mkdir(os.path.join(self.out,'encode_genotype'))
+			os.mkdir(os.path.join(self.out,'encode_phenotype'))
 			os.mkdir(os.path.join(self.out,'encode_individuals'))
+			os.mkdir(os.path.join(self.out,'encode_interaction'))
 
 		except:
 			print('Directories "encode_genotype","encode_phenotype","encode_individuals" are already exist in {}...'.format(self.out))
@@ -73,14 +75,13 @@ class Encoder(object):
 
 
 	def save_npy(self,data, save_path=None, info=None, index=None):
-		#only for phenotype
 		if isinstance(save_path,type(None)) or  not os.path.isdir(save_path):
 			raise ValueError('There is no such path or directory {}'.format(save_path))
-		np.save(os.path.join(save_path,str(self.npy_iter)+'_'+self.study_name+ '.npy'),data )
+		np.save(os.path.join(save_path,str(self.npy_iter[save_path])+'_'+self.study_name+ '.npy'),data )
 		if self.phen_info_dic['id'] is None:
 			self.phen_info_dic['id']=np.array(info._data.id)[index]
-		self.phen_info_dic[str(self.npy_iter)+'_'+self.study_name+ '.npy']=info._data.names[info._data.start:info._data.finish]
-		self.npy_iter+=1
+		self.phen_info_dic[str(self.npy_iter[save_path])+'_'+self.study_name+ '.npy']=info._data.names[info._data.start:info._data.finish]
+		self.npy_iter[save_path] += 1
 
 	def save_csv(self,data,save_path=None, info=None, index=None):
 		if isinstance(save_path,type(None)) or  not os.path.isdir(save_path):
@@ -88,8 +89,8 @@ class Encoder(object):
 		df=pd.DataFrame(data)
 		df.columns=info._data.names[info._data.start:info._data.finish]
 		df.insert(0,'id',np.array(info._data.id)[index])
-		df.to_csv(os.path.join(save_path,str(self.npy_iter)+'_'+self.study_name+ '.csv'), sep='\t', index=False)
-		self.npy_iter+=1
+		df.to_csv(os.path.join(save_path,str(self.npy_iter[save_path])+'_'+self.study_name+ '.csv'), sep='\t', index=False)
+		self.npy_iter[save_path] += 1
 
 
 

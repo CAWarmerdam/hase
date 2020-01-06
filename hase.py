@@ -9,11 +9,12 @@ if PYTHON_PATH is not None:
 import h5py
 import tables
 from hdgwas.tools import Timer, Checker, study_indexes, Mapper, HaseAnalyser, merge_genotype, Reference, timing, \
-    check_np, check_converter
+    check_np, check_converter, get_intersecting_individual_indices
 from hdgwas.converter import GenotypePLINK, GenotypeMINIMAC, GenotypeVCF
 from hdgwas.data import Reader, MetaParData, MetaPhenotype
 from hdgwas.fake import Encoder
-from hdgwas.hdregression import HASE, A_covariates, A_tests, B_covariates, C_matrix, A_inverse, B4
+from hdgwas.hdregression import HASE, A_covariates, A_tests, B_covariates, C_matrix, A_inverse, B4, \
+    get_a_inverse_extended, hase_supporting_interactions
 import argparse
 import gc
 from hdgwas.pard import partial_derivatives
@@ -124,7 +125,7 @@ if __name__ == '__main__':
     ###
 
     # ADVANCED SETTINGS
-    parser.add_argument('-interaction', type=str,
+    parser.add_argument('-interaction', type=str, nargs='+',
                         help='path to file with data for genotype interaction test')  # TODO (low)
     parser.add_argument('-mapper_chunk', type=int, help='Change mapper chunk size from config file')
     ###
@@ -210,11 +211,11 @@ if __name__ == '__main__':
         e = Encoder(args.out)
         e.study_name = args.study_name[0]
 
-        row_index, ids = study_indexes(phenotype=phen.folder._data, genotype=gen.folder._data,
-                                       covariates=interactions.folder._data)
+        row_index, intersecting_identifiers = study_indexes(phenotype=phen.folder._data, genotype=gen.folder._data,
+                                                            covariates=interactions.folder._data if interactions else None)
         with Timer() as t:
 
-            e.matrix(len(ids), save=True)
+            e.matrix(len(intersecting_identifiers), save=True)
             N_snps_read = 0
             while True:
                 with Timer() as t_gen:
@@ -238,13 +239,33 @@ if __name__ == '__main__':
             while True:
                 with Timer() as t_phen:
                     phenotype = phen.get_next(index=row_index[1]) # Get the indices of the common ids in the phenotype data (1)
-                    # Assume that we do not have to get the interaction values in chunks
-                    interaction_values = interactions.folder._data[row_index[2],:] # use the indices of the common ids in the interaction data (2)
+                    if interactions:
+                        # Assume that we do not have to get the interaction values in chunks
+                        interaction_phenotype_values = interactions.get_next(index=row_index[2]) # use the indices of the common ids in the interaction data (2)
+                        if isinstance(interaction_phenotype_values, type(None)):
+                            break
+
+                        # For the interaction data, for every factor use for interaction term with genotype data,
+                        # multiply the data with the phenotype. After this, encode the data using the same matrix that
+                        # was used for the phenotype data.
+                        for i in range(interaction_phenotype_values.shape[1]):
+                            # np.multiply broadcasts the vector of interaction values into a 2d array with the same
+                            # dimensions as the phenotype data. This results in the correct 2d array to encode using
+                            # the inverse of F
+                            encode_product_of_phenotype_and_interaction_values = e.encode(
+                                np.multiply(phenotype, interaction_phenotype_values[:, i]), data_type='phenotype')
+                            if interactions.folder.format == '.npy':
+                                e.save_npy(encode_product_of_phenotype_and_interaction_values,
+                                           save_path=os.path.join(args.out, 'encode_interaction'),
+                                           info=phen.folder, index=row_index[2])
+                            if interactions.folder.format in ['.csv', '.txt']:
+                                e.save_csv(encode_product_of_phenotype_and_interaction_values,
+                                           save_path=os.path.join(args.out, 'encode_interaction'),
+                                           info=phen.folder, index=row_index[2])
 
                     if isinstance(phenotype, type(None)):
                         break
-                    if isinstance(interaction_values, type(None)):
-                        break
+
                     encode_phenotype = e.encode(phenotype, data_type='phenotype')
 
                     if phen.folder.format == '.npy':
@@ -254,25 +275,8 @@ if __name__ == '__main__':
                         e.save_csv(encode_phenotype, save_path=os.path.join(args.out, 'encode_phenotype'),
                                    info=phen.folder, index=row_index[1])
                     encode_phenotype = None
-
-                    # For the interaction data, for every factor use for interaction term with genotype data,
-                    # multiply the data with the phenotype. After this, encode the data using the same matrix that was
-                    # used for the phenotype data.
-                    for i in range(interaction_values.shape[1]):
-                        # np.multiply broadcasts the vector of interaction values into a 2d array with the same
-                        # dimensions as the phenotype data. This results in the correct 2d array to encode using
-                        # the inverse of F
-                        encode_product_of_phenotype_and_interaction_values = e.encode(np.multiply(phenotype, interaction_values[:,i]), data_type='phenotype')
-                        if interactions.folder.format == '.npy':
-                            e.save_npy(encode_product_of_phenotype_and_interaction_values,
-                                       save_path=os.path.join(args.out, 'encode_interaction_' + str(i)),
-                                       info=interactions.folder, index=row_index[1])
-                        if interactions.folder.format in ['.csv', '.txt']:
-                            e.save_csv(encode_product_of_phenotype_and_interaction_values,
-                                       save_path=os.path.join(args.out, 'encode_interaction_' + str(i)),
-                                       info=interactions.folder, index=row_index[1])
-
                     gc.collect()
+
             if phen.folder.format == '.npy':
                 np.save(os.path.join(os.path.join(args.out, 'encode_phenotype', 'info_dic.npy')), e.phen_info_dic)
             print ('Time to create fake phenotype is {}sec'.format(t_phen.secs))
@@ -302,11 +306,20 @@ if __name__ == '__main__':
         if cov.folder.n_files > 1:
             raise ValueError('In covariates folder should be only one file!')
 
+        # Try to load a file with values to use for genotype interaction terms if the argument was used.
+        interaction = None
+        if args.interaction is not None:
+            # Read the interactions
+            interaction = Reader('interaction')
+            interaction.start(args.interaction)
+            if interaction.folder.n_files > 1:
+                raise ValueError('In interaction folder should be only one file!')
+
         gen = Reader('genotype')
         gen.start(args.genotype[0], hdf5=args.hdf5, study_name=args.study_name[0], ID=False)
 
         with Timer() as t:
-            partial_derivatives(save_path=args.out, COV=cov, PHEN=phen, GEN=gen,
+            partial_derivatives(save_path=args.out, COV=cov, PHEN=phen, GEN=gen, INTERACTION=interaction,
                                 MAP=mapper, MAF=args.maf, R2=None, B4_flag=args.pd_full,
                                 study_name=args.study_name[0], intercept=args.intercept)
         print ('Time to compute partial derivatives : {} sec'.format(t.secs))
@@ -345,29 +358,37 @@ if __name__ == '__main__':
 
         Analyser = HaseAnalyser()
 
-        pard = []
+        # It appears to me that the pard list contains
+        # partial derivatives matrices for every study
+        partial_derivatives_folders = []
 
         with Timer() as t:
             for i, j in enumerate(args.derivatives):
-                pard.append(Reader('partial'))
-                pard[i].start(j, study_name=args.study_name[i])
-                pard[i].folder.load()
+                partial_derivatives_folders.append(Reader('partial'))
+                partial_derivatives_folders[i].start(j, study_name=args.study_name[i])
+                partial_derivatives_folders[i].folder.load()
 
-        print "time to set PD is {}s".format(t.secs)
+        print "Time used to load partial derivatives is {}s".format(t.secs)
 
-        PD = [False if isinstance(i.folder._data.b4, type(None)) else True for i in pard]
+        # Create a list containing booleans representing the presence
+        # of the b4 data in the partial derivatives folders
+        b4_presence_per_study = [False if isinstance(i.folder._data.b4, type(None)) else True for i in partial_derivatives_folders]
 
-        if np.sum(PD) != len(pard) and np.sum(PD) != 0:
-            raise ValueError('All study should have b4 data for partial derivatives!')
+        # The if statement roughly translates to:
+        # if one study contains b4 data in the partial derivatives folder,
+        # all should have b4 data, otherwise an error is raised.
+        if np.sum(b4_presence_per_study) != len(partial_derivatives_folders) and np.sum(b4_presence_per_study) != 0:
+            raise ValueError('All studies should have b4 data for partial derivatives!')
 
         if args.protocol is not None:
             protocol = Protocol(args.protocol)
         else:
             protocol = None
 
-        meta_pard = MetaParData(pard, args.study_name, protocol=protocol)
+        meta_pard = MetaParData(partial_derivatives_folders, args.study_name, protocol=protocol)
 
-        if np.sum(PD) == 0:
+        is_no_b4_present_in_partial_derivatives = np.sum(b4_presence_per_study) == 0
+        if is_no_b4_present_in_partial_derivatives:
             phen = []
 
             with Timer() as t:
@@ -386,14 +407,37 @@ if __name__ == '__main__':
                     gen[i].start(j, hdf5=args.hdf5, study_name=args.study_name[i], ID=False)
             print "Time to set gen {}s".format(t.secs)
 
-            row_index, ids = study_indexes(phenotype=tuple(i.folder._data for i in phen),
-                                           genotype=tuple(i.folder._data for i in gen),
-                                           covariates=tuple(i.folder._data.metadata for i in pard))
-            if row_index[2].shape[0] != np.sum([i.folder._data.metadata['id'].shape[0] for i in pard]):
+            # Create a dictionary with the datasets for obtaining
+            # the indices of shared identifiers
+            datasets = {"phenotype": tuple(i.folder._data for i in phen),
+                        "genotype": tuple(i.folder._data for i in gen),
+                        "partial_derivatives": tuple(i.folder._data.metadata for i in partial_derivatives_folders)}
+
+            # If interaction folders are supplied, read these.
+            encoded_interactions = None
+            if args.interaction:
+                encoded_interaction_folders = []
+                with Timer() as t:
+                    for i, j in enumerate(args.interaction):
+                        encoded_interaction_folders.append(Reader('interaction_folder'))
+                        # Have to check if these are the correct arguments for .start(...)
+                        encoded_interaction_folders[i].start(j)
+                datasets["interaction"] = tuple(i.folder._data for i in encoded_interaction_folders)
+                encoded_interactions = MetaPhenotype(encoded_interaction_folders,
+                                                     include=args.ph_id_inc,
+                                                     exclude=args.ph_id_exc)
+                print "Time used to load encoded interaction data: {}s".format(t.secs)
+
+            # Get common ids
+            row_index, intersecting_identifiers = get_intersecting_individual_indices(datasets)
+
+            # Do something for all covariates
+            if row_index["partial_derivatives"].shape[0] != np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders]):
                 raise ValueError(
                     'Partial Derivatives covariates have different number of subjects {} than genotype and phenotype {}'.format(
-                        row_index[2].shape[0],
-                        np.sum([i.folder._data.metadata['id'].shape[0] for i in pard])))
+                        row_index["covariates"].shape[0],
+                        np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders])))
+
         while True:
             if mapper.cluster == 'n':
                 SNPs_index, keys = mapper.get()
@@ -408,15 +452,13 @@ if __name__ == '__main__':
                 break
 
             Analyser.rsid = keys
-            if np.sum(PD) == 0:
+            if is_no_b4_present_in_partial_derivatives:
                 genotype = np.array([])
                 with Timer() as t_g:
                     genotype = merge_genotype(gen, SNPs_index, mapper)
-                    genotype = genotype[:, row_index[0]]
+                    genotype = genotype[:, row_index["genotype"]]
                 print "Time to get G {}s".format(t_g.secs)
             # TODO (low) add interaction
-			# The A, B, C matrices are about to be created...
-			# Seems like a good place to add the interaction stuff.
 
 
             a_test = np.array([])
@@ -424,6 +466,7 @@ if __name__ == '__main__':
             C = np.array([])
             a_cov = np.array([])
             b4 = np.array([])
+            b_interaction = np.array([])
 
             if args.protocol is not None:
                 if protocol.enable:
@@ -432,11 +475,11 @@ if __name__ == '__main__':
                 regression_model = None
 
             with Timer() as t_pd:
-                if np.sum(PD) == 0:
-                    a_test, b_cov, C, a_cov = meta_pard.get(SNPs_index=SNPs_index, regression_model=regression_model,
+                if is_no_b4_present_in_partial_derivatives:
+                    a_test, b_cov, C, a_cov = meta_pard.get(variant_indices=SNPs_index, regression_model=regression_model,
                                                             random_effect_intercept=args.effect_intercept)
                 else:
-                    a_test, b_cov, C, a_cov, b4 = meta_pard.get(SNPs_index=SNPs_index, B4=True,
+                    a_test, b_cov, C, a_cov, b4 = meta_pard.get(variant_indices=SNPs_index, B4=True,
                                                                 regression_model=regression_model,
                                                                 random_effect_intercept=args.effect_intercept)
 
@@ -446,9 +489,10 @@ if __name__ == '__main__':
 
             if args.maf != 0:
                 filter = (MAF > args.maf) & (MAF < 1 - args.maf) & (MAF != 0.5)
+                # This probably handles the large a_test matrices as well.
                 a_test = a_test[filter, :]
                 Analyser.MAF = MAF[filter]
-                if np.sum(PD) == 0:
+                if is_no_b4_present_in_partial_derivatives:
                     genotype = genotype[filter, :]
                 else:
                     b4 = b4[filter, :]
@@ -459,26 +503,32 @@ if __name__ == '__main__':
             else:
                 Analyser.MAF = MAF
 
-            a_inv = A_inverse(a_cov, a_test)
-            N_con = a_inv.shape[1] - 1
+            # Use new A_inverse that supports variable number of non-constant A parts
+            # a_inv = A_inverse(a_cov, a_test)
+            a_inv = get_a_inverse_extended(a_cov, a_test)
+
+            number_of_variable_terms = 1
+            N_con = a_inv.shape[1] - number_of_variable_terms
             print 'There are {} subjects in study.'.format(meta_pard.get_n_id())
             DF = (meta_pard.get_n_id() - a_inv.shape[1])
 
-            if np.sum(PD) == 0:
+            if is_no_b4_present_in_partial_derivatives:
 
                 while True:
+                    # Get the next phenotype chunk.
                     phenotype = np.array([])
                     with Timer() as t_ph:
                         phenotype, phen_names = meta_phen.get()
                     print "Time to get PH {}s".format(t_ph.secs)
 
+                    # If the phenotype type is None, the loop is done...
                     if isinstance(phenotype, type(None)):
                         meta_phen.processed = 0
                         print 'All phenotypes processed!'
                         break
                     print ("Merged phenotype shape {}".format(phenotype.shape))
                     # TODO (middle) select phen from protocol
-                    phenotype = phenotype[row_index[1], :]
+                    phenotype = phenotype[row_index["phenotype"], :]
                     print ("Selected phenotype shape {}".format(phenotype.shape))
                     keys = meta_pard.phen_mapper.dic.keys()
                     phen_ind_dic = {k: i for i, k in enumerate(keys)}
@@ -492,8 +542,16 @@ if __name__ == '__main__':
                     b_cov_test = b_cov[:, phen_ind]
 
                     b4 = B4(phenotype, genotype)
+                    b_variable = b4[np.newaxis, ...]
+
+                    # If the encoded interactions are supplied add these to the b_variable part.
+                    if encoded_interactions:
+                        interaction_phenotype_values, phen_names = encoded_interactions.get()
+                        interaction_values = B4(interaction_phenotype_values, genotype)
+                        b_variable = np.append(b_variable, [interaction_values])
+
                     print ("B4 shape is {}".format(b4.shape))
-                    t_stat, SE = HASE(b4, a_inv, b_cov_test, C_test, N_con, DF)
+                    t_stat, SE = hase_supporting_interactions(b_variable, a_inv, b_cov_test, C_test, N_con, DF)
 
                     if mapper.cluster == 'y':
                         Analyser.cluster = True
@@ -510,7 +568,7 @@ if __name__ == '__main__':
                     gc.collect()
 
             else:
-                t_stat, SE = HASE(b4, a_inv, b_cov, C, N_con, DF)
+                t_stat, SE = hase_supporting_interactions(b4, a_inv, b_cov, C, N_con, DF)
 
                 Analyser.t_stat = t_stat
                 Analyser.SE = SE

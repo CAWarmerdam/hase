@@ -67,14 +67,38 @@ def A_tests(covariates, genotype, intercept=True):  # TODO (low) extend for any 
         return np.hstack((sec, tr))
 
 
-def calculate_variant_dependent_A(genotype, factor_matrix,
+def calculate_variant_dependent_a(genotype, factor_matrix,
                                   covariates, intercept=True):
+    """
+    Function that calculates the part of A that varies between variants.
+    The output is a 2d array for every variant in the genotype matrix, with
+    the values representing the sum of the products of the determinant on the row
+    and the non-constant determinant on the column for every sample
+    For instance, when no interaction stuff is required and intercept is true,
+    the variable dependent a for every variant is equivalent to the following.
+    [[ sum ( genotypes[variant_index] * intercept value ) ]
+     [ sum ( genotypes[variant_index] * covariate values ) ]
+     [ sum ( genotypes[variant_index] * genotypes[variant_index] ) ]
+
+    When interaction values are used, the variable dependent a for every variant
+    is equivalent to the following, where interaction_values = interaction_factor * genotypes
+    [[ sum (                   interaction_values[variant_index] * intercept value ) , sum ( genotypes[variant_index] * intercept value ) ]
+     [ sum (                  interaction_values[variant_index] * covariate values ) , sum ( genotypes[variant_index] * covariate values ) ]
+     [ sum ( interaction_values[variant_index] * interaction_values[variant_index] ) , sum ( genotypes[variant_index] * interaction_values[variant_index] ) ]
+     [ sum (                                                                       0 , sum ( genotypes[variant_index] * gentoypes[variant_index] ) ]]
+
+    :param genotype: A 2d matrix
+    :param factor_matrix: A 2d matrix for the interaction values
+    :param covariates: A 2d matrix with covariates
+    :param intercept: If the intercept is true.
+    :return: 3d array with variable dependent a (see above.)
+    """
     number_of_variable_terms = (factor_matrix.shape[1] + 1)
     number_of_total_terms = (covariates.shape[1] + number_of_variable_terms)
     if intercept:
         number_of_total_terms += 1
 
-    variant_dependent_A = np.zeros(
+    variant_dependent_a = np.zeros(
         number_of_variable_terms * number_of_total_terms * genotype.shape[0]).reshape((
         number_of_variable_terms, number_of_total_terms, genotype.shape[0]))
     variable_term_index = 0
@@ -97,10 +121,10 @@ def calculate_variant_dependent_A(genotype, factor_matrix,
         if intercept:
             fst = np.sum(interaction_values, axis=1).reshape(-1, 1)
             variable_term_values = np.hstack((fst, sec, tr)).T
-            variant_dependent_A[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
+            variant_dependent_a[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
         else:
             variable_term_values = np.hstack((sec, tr)).T
-            variant_dependent_A[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
+            variant_dependent_a[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
 
         variable_term_index += 1
         covariates = np.dstack((covariates, interaction_values))
@@ -112,11 +136,13 @@ def calculate_variant_dependent_A(genotype, factor_matrix,
     if intercept:
         fst = np.sum(genotype, axis=1).reshape(-1, 1)
         variable_term_values = np.hstack((fst, sec, tr)).T
-        variant_dependent_A[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
+        variant_dependent_a[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
     else:
         variable_term_values = np.hstack((sec, tr)).T
-        variant_dependent_A[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
-    return variant_dependent_A.T
+        variant_dependent_a[variable_term_index, 0:variable_term_values.shape[0]] = variable_term_values
+    if variant_dependent_a.shape[0] == 1:
+        variant_dependent_a = np.squeeze(variant_dependent_a, axis=0)
+    return variant_dependent_a.T
 
 
 def calculate_dot_product_for_variants(covariates, other_independent_determinant):
@@ -142,9 +168,11 @@ def B_covariates(covariates, phenotype, intercept=True):
         return b_cov
 
 
-def A_inverse_2(a_covariates, variant_dependent_a):
+def get_a_inverse_extended(a_covariates, variant_dependent_a):
     A_inv = []
     n,m = a_covariates.shape
+    if variant_dependent_a.ndim == 2:
+        return A_inverse(a_covariates, variant_dependent_a)
     k = n + variant_dependent_a.shape[2]
 
     for i in range(variant_dependent_a.shape[0]):
@@ -227,7 +255,7 @@ def HASE(b4, A_inverse, b_cov, C, N_con, DF):
 
 # @timing
 # @save_parameters
-def HASE2(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
+def hase_supporting_interactions(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
     with Timer() as t:
         # These together form the X matrix
         B13 = b_cov
@@ -294,7 +322,7 @@ def HASE2(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
         # Standard errors are stored in the same ways as the t-statistics:
         # SE[variant][0][phenotype]
 
-    print("time to compute GWAS for {} phenotypes and {} SNPs .... {} sec".format(b_variable.shape[1],
+    print("time to compute GWAS for {} phenotypes and {} SNPs .... {} sec".format(b_variable.shape[2],
                                                                                   a_inverse.shape[0],
                                                                                   t.secs))
     return t_stat, SE

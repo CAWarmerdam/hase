@@ -18,7 +18,7 @@ import statsmodels.api as sm
 from scipy import stats
 
 from hdgwas.hdregression import A_covariates, A_tests, B_covariates, C_matrix, B4, A_inverse, HASE, \
-    calculate_variant_dependent_A, A_inverse_2, HASE2
+    calculate_variant_dependent_a, get_a_inverse_extended, hase_supporting_interactions
 
 
 class EncoderCopy:
@@ -126,7 +126,7 @@ def test_hase2_no_interaction(number_of_individuals,
 
     t_stat, SE = HASE(b4, a_inverse, b_cov, C, N_con, DF)
 
-    t_stat2, SE2 = HASE2(b_variable, a_inverse_alternative, b_cov, C, N_con, DF)
+    t_stat2, SE2 = hase_supporting_interactions(b_variable, a_inverse_alternative, b_cov, C, N_con, DF)
 
     assert(np.allclose(SE, SE2))
     assert(np.allclose(t_stat, t_stat2))
@@ -144,10 +144,10 @@ def calculate_a_alternative(covariates_matrix, genotype_matrix):
     factor_matrix = np.empty((0, 0))
     # Get the constant part of A
     a_cov = A_covariates(covariates_matrix)
-    variant_dependent_A = calculate_variant_dependent_A(genotype_matrix,
+    variant_dependent_a = calculate_variant_dependent_a(genotype_matrix,
                                                         factor_matrix,
                                                         covariates_matrix)
-    a_inverse_alternative = A_inverse_2(a_cov, variant_dependent_A)
+    a_inverse_alternative = get_a_inverse_extended(a_cov, variant_dependent_a)
     return a_inverse_alternative
 
 
@@ -192,20 +192,21 @@ def test_hase2_with_interaction(number_of_individuals, number_of_variants):
 
     # Get the constant part of A
     a_cov = A_covariates(covariates_matrix)
-    variant_dependent_A = calculate_variant_dependent_A(genotype_matrix,
+    variant_dependent_A = calculate_variant_dependent_a(genotype_matrix,
                                                         covariates_matrix,
                                                         covariates_matrix)
 
     # Get the b part that corresponds to the interaction values
     b_interaction = np.dot(genotype_matrix_encoded, interaction_phenotype_matrix_encoded)
 
+    # Get the constant part of b
     b_cov = B_covariates(covariates_matrix, phenotype_matrix)
 
     C = C_matrix(phenotype_matrix)
 
     b4 = B4(phenotype_matrix_encoded, genotype_matrix_encoded)
 
-    a_inv = A_inverse_2(a_cov, variant_dependent_A)
+    a_inv = get_a_inverse_extended(a_cov, variant_dependent_A)
 
     b_variable = np.stack((b_interaction, b4))
 
@@ -215,7 +216,7 @@ def test_hase2_with_interaction(number_of_individuals, number_of_variants):
 
     DF = (number_of_individuals - a_inv.shape[1])
 
-    t_stat, SE = HASE2(b_variable, a_inv, b_cov, C, N_con, DF)
+    t_stat, SE = hase_supporting_interactions(b_variable, a_inv, b_cov, C, N_con, DF)
 
     model_table = fit_model(X[..., 0], phenotype_matrix[..., 0])
 

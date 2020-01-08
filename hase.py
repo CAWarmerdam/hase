@@ -125,8 +125,12 @@ if __name__ == '__main__':
     ###
 
     # ADVANCED SETTINGS
-    parser.add_argument('-interaction', type=str, nargs='+',
+    parser.add_argument('-interaction', type=str,
                         help='path to file with data for genotype interaction test')  # TODO (low)
+
+    parser.add_argument('-interaction_encoded', type=str, nargs='+',
+                        help='path to file with data for genotype interaction test')
+
     parser.add_argument('-mapper_chunk', type=int, help='Change mapper chunk size from config file')
     ###
     args = parser.parse_args()
@@ -386,6 +390,7 @@ if __name__ == '__main__':
             protocol = None
 
         meta_pard = MetaParData(partial_derivatives_folders, args.study_name, protocol=protocol)
+        encoded_interactions = None
 
         is_no_b4_present_in_partial_derivatives = np.sum(b4_presence_per_study) == 0
         if is_no_b4_present_in_partial_derivatives:
@@ -414,11 +419,10 @@ if __name__ == '__main__':
                         "partial_derivatives": tuple(i.folder._data.metadata for i in partial_derivatives_folders)}
 
             # If interaction folders are supplied, read these.
-            encoded_interactions = None
-            if args.interaction:
+            if args.interaction_encoded:
                 encoded_interaction_folders = []
                 with Timer() as t:
-                    for i, j in enumerate(args.interaction):
+                    for i, j in enumerate(args.interaction_encoded):
                         encoded_interaction_folders.append(Reader('interaction_folder'))
                         # Have to check if these are the correct arguments for .start(...)
                         encoded_interaction_folders[i].start(j)
@@ -507,8 +511,8 @@ if __name__ == '__main__':
             # a_inv = A_inverse(a_cov, a_test)
             a_inv = get_a_inverse_extended(a_cov, a_test)
 
-            number_of_variable_terms = 1
-            N_con = a_inv.shape[1] - number_of_variable_terms
+            number_of_variable_terms = a_test.shape[2]
+            number_of_constant_terms = a_inv.shape[1] - number_of_variable_terms
             print 'There are {} subjects in study.'.format(meta_pard.get_n_id())
             DF = (meta_pard.get_n_id() - a_inv.shape[1])
 
@@ -517,13 +521,21 @@ if __name__ == '__main__':
                 while True:
                     # Get the next phenotype chunk.
                     phenotype = np.array([])
+
                     with Timer() as t_ph:
                         phenotype, phen_names = meta_phen.get()
                     print "Time to get PH {}s".format(t_ph.secs)
 
                     # If the phenotype type is None, the loop is done...
                     if isinstance(phenotype, type(None)):
+                        # Reset the processed phenotypes when the loop is done.
+                        # With the next chunk of SNPs we need to do these again
                         meta_phen.processed = 0
+                        # The encoded interactions are also processed at the
+                        # same rate as the phenotypes.
+                        # Reset the number of processed values for this as well.
+                        if encoded_interactions:
+                            encoded_interactions.processed = 0
                         print 'All phenotypes processed!'
                         break
                     print ("Merged phenotype shape {}".format(phenotype.shape))
@@ -548,10 +560,10 @@ if __name__ == '__main__':
                     if encoded_interactions:
                         interaction_phenotype_values, phen_names = encoded_interactions.get()
                         interaction_values = B4(interaction_phenotype_values, genotype)
-                        b_variable = np.append(b_variable, [interaction_values])
+                        b_variable = np.append(b_variable, [interaction_values], axis=0)
 
                     print ("B4 shape is {}".format(b4.shape))
-                    t_stat, SE = hase_supporting_interactions(b_variable, a_inv, b_cov_test, C_test, N_con, DF)
+                    t_stat, SE = hase_supporting_interactions(b_variable, a_inv, b_cov_test, C_test, number_of_constant_terms, DF)
 
                     if mapper.cluster == 'y':
                         Analyser.cluster = True
@@ -568,7 +580,7 @@ if __name__ == '__main__':
                     gc.collect()
 
             else:
-                t_stat, SE = hase_supporting_interactions(b4, a_inv, b_cov, C, N_con, DF)
+                t_stat, SE = hase_supporting_interactions(b4, a_inv, b_cov, C, number_of_constant_terms, DF)
 
                 Analyser.t_stat = t_stat
                 Analyser.SE = SE

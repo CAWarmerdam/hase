@@ -58,7 +58,7 @@ def partial_derivatives(save_path=None, COV=None, PHEN=None, GEN=None, INTERACTI
                                        genotype=GEN.folder._data,
                                        covariates=COV.folder._data)
 
-    metadata = {'id': ids, 'MAF': [], 'filter': [], 'names': [], 'phenotype': []}
+    metadata = {'id': ids, 'MAF': [], 'filter': [], 'names': [], 'phenotype': [], 'interaction_names': []}
 
     # TODO (mid) add parameter to compute PD only for new phenotypes or cov
     b_cov = []
@@ -73,6 +73,8 @@ def partial_derivatives(save_path=None, COV=None, PHEN=None, GEN=None, INTERACTI
         if intercept:
             metadata['names'].append(study_name + '_intercept')
         metadata['names'] = metadata['names'] + [study_name + '_' + i for i in COV.folder._data.get_names()]
+        if INTERACTION:
+            metadata['interaction_names'] = metadata['interaction_names'] + [study_name + '_' + i for i in INTERACTION.folder._data.get_names()]
 
         a_cov = A_covariates(covariates, intercept=intercept)
         np.save(os.path.join(save_path, study_name + '_a_cov.npy'), a_cov)

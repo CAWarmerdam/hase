@@ -332,11 +332,12 @@ class ParData(Data):
     def check(self):  # TODO (middle) place to implement the check of analysis protocol and log summary from PD
         print ('Number of subjects {}'.format(int(self.a_cov[0, 0])))
 
-    def get(self, gen_order=None, phen_order=None, cov_order=None):
+    def get(self, gen_order=None, phen_order=None, cov_order=None, interaction_order=None):
 
-        if gen_order is None or phen_order is None or cov_order is None:
+        if gen_order is None or phen_order is None or cov_order is None or interaction_order is None:
             raise ValueError('PD order is not define!')
-        indices_a_test = np.ix_(gen_order, np.append(cov_order, self.a_test.shape[1] - 1))
+        indices_a_test = np.ix_(gen_order,
+                                np.concatenate((cov_order, interaction_order, self.a_test.shape[1] - 1), axis=None))
         indices_b_cov = np.ix_(cov_order, phen_order)
         indices_a_cov = np.ix_(cov_order, cov_order)
 
@@ -469,7 +470,9 @@ class MetaParData(object):
         self.study_names = study_names
         self.phen_mapper = Mapper()
         self.cov_mapper = Mapper()
+        self.interaction_mapper = Mapper()
         self.covariates = OrderedDict()
+        self.interactions = OrderedDict()
         self.pd_folders = OrderedDict()
         for i in pd:
             self.pd_folders[i.folder.name] = i
@@ -478,17 +481,27 @@ class MetaParData(object):
             for i, partial_derivatives in enumerate(pd):
                 # For this partial derivatives folder, add the determinant names to a dictionary
                 self.covariates[partial_derivatives] = [determinant_names.split(self.study_names[i] + '_')[1] for determinant_names in partial_derivatives.folder._data.metadata['names']]
+                self.interactions[partial_derivatives] = [determinant_names.split(self.study_names[i] + '_')[1] for determinant_names in partial_derivatives.folder._data.metadata['interaction_names']]
                 # Fill the mapper with indices of every phenotype for each partial derivatives folder
                 if i == 0:
-                    self.phen_mapper.fill(partial_derivatives.folder._data.metadata['phenotype'], partial_derivatives.folder.name, reference=False)
-                    self.cov_mapper.fill(self.covariates[partial_derivatives], partial_derivatives.folder.name, reference=False)
+                    self.phen_mapper.fill(partial_derivatives.folder._data.metadata['phenotype'],
+                                          partial_derivatives.folder.name, reference=False)
+                    self.cov_mapper.fill(self.covariates[partial_derivatives],
+                                         partial_derivatives.folder.name, reference=False)
+                    self.interaction_mapper.fill(self.interactions[partial_derivatives],
+                                                 partial_derivatives.folder.name, reference=False)
                 else:
-                    self.phen_mapper.push(partial_derivatives.folder._data.metadata['phenotype'], name=partial_derivatives.folder.name, new_id=False)
-                    self.cov_mapper.push(self.covariates[partial_derivatives], name=partial_derivatives.folder.name, new_id=False)
+                    self.phen_mapper.push(partial_derivatives.folder._data.metadata['phenotype'],
+                                          name=partial_derivatives.folder.name, new_id=False)
+                    self.cov_mapper.push(self.covariates[partial_derivatives],
+                                         name=partial_derivatives.folder.name, new_id=False)
+                    self.interaction_mapper.push(self.interactions[partial_derivatives],
+                                                 name=partial_derivatives.folder.name, new_id=False)
                 keys.append(partial_derivatives.folder.name)
 
             self.phen_order = _check(self.phen_mapper, keys)
             self.cov_order = _check(self.cov_mapper, keys)
+            self.interaction_order = {key: (value + len(self.cov_order[key])) for key, value in _check(self.interaction_mapper, keys).items()}
 
         if protocol is not None:
             if not protocol.enable:
@@ -548,7 +561,8 @@ class MetaParData(object):
             # to the variant index for the first study.
             a_test, b_cov, C, a_cov = self.pd_folders[study_names[0]].get(gen_order=variant_indices[0],
                                                                 phen_order=self.phen_order[study_names[0]],
-                                                                cov_order=self.cov_order[study_names[0]])
+                                                                cov_order=self.cov_order[study_names[0]],
+                                                                interaction_order=self.interaction_order[study_names[0]])
             # What to do?
             # What is the random effect intercept?
             if random_effect_intercept and len(self.pd_folders) > 1:  # TODO (high)

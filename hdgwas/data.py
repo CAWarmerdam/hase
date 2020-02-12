@@ -511,7 +511,7 @@ class MetaParData(object):
         # Set print options for some reason
         np.set_printoptions(precision=3, suppress=True)
         print ("*******PD CHECK*********")
-        print ('A covariates...')
+        print ('A covariates.single...')
         print old[3] / old[3][0, 0]
         print new[3] / new[3][0, 0]
         print ('FREQ TESTs')

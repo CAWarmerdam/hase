@@ -161,7 +161,7 @@ def partial_derivatives(save_path=None, COV=None, PHEN=None, GEN=None, INTERACTI
             # Calculate the variant dependent a (non-constant part of a) with the new function that
             # also supports the improved
             a_test.append(calculate_variant_dependent_a(genotype, interactions, covariates, intercept=intercept))
-            # a_test.append(A_tests(covariates,genotype,intercept=intercept))
+            # a_test.append(A_tests(covariates.single,genotype,intercept=intercept))
 
             if B4_flag:
                 # works only when all phenotypes in one chunk, if not, do not use this option!

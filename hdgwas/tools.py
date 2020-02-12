@@ -415,7 +415,7 @@ class Mapper(object):
 	def fill(self, keys, name, repeats=False, reference=False):  # TODO (middle) remove
 		"""
 		Fill the mapper
-		:param keys: The labels for phenotypes/covariates that are passed
+		:param keys: The labels for phenotypes/covariates.single that are passed
 		:param name: Study name
 		:param repeats: Dunno, False is passed afaik
 		:param reference: Dunno, False is passed afaik
@@ -807,7 +807,7 @@ def study_indexes(args=None,
 				  interaction=None):
 	"""
 	Method that matches sample identifiers between genotype, phenotype and
-	covariates datasets.
+	covariates.single datasets.
 	:param args: Maybe supposed to be the HASE output path? Currently does not do a whole lot.
 	:param genotype: The genotype data (gen.folder._data)
 	:param phenotype: The phenotype data (phen.folder._data)

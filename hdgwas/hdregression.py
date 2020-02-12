@@ -12,7 +12,7 @@ import tables
 # @timing
 def A_covariates(covariates, intercept=True):
     '''
-    :param covariates: (n_subjects, n_covariates) - only constant covariates should be included (age, sex, ICV etc)
+    :param covariates: (n_subjects, n_covariates) - only constant covariates.single should be included (age, sex, ICV etc)
     :param intercept: default True, add intercept to model
     :return: matrix (n_cavariates, n_covariates), constant part for the rest of the study
     '''
@@ -50,7 +50,7 @@ def calculate_interaction_b(genotype, interaction_values):
 # @timing
 def A_tests(covariates, genotype, intercept=True):  # TODO (low) extend for any number of tests in model
     '''
-    :param covariates: (n_subjects, n_covariates) - only constant covariates should be included (age, sex, ICV etc)
+    :param covariates: (n_subjects, n_covariates) - only constant covariates.single should be included (age, sex, ICV etc)
     :param genotype: (n_tests, n_subjects) - test could be any kind of quantitative covariance
     :return: (1,n_covariates + intercept)
     '''
@@ -89,7 +89,7 @@ def calculate_variant_dependent_a(genotype, factor_matrix,
 
     :param genotype: A 2d matrix
     :param factor_matrix: A 2d matrix for the interaction values
-    :param covariates: A 2d matrix with covariates
+    :param covariates: A 2d matrix with covariates.single
     :param intercept: If the intercept is true.
     :return: 3d array with variable dependent a (see above.)
     """
@@ -102,7 +102,7 @@ def calculate_variant_dependent_a(genotype, factor_matrix,
         number_of_variable_terms * number_of_total_terms * genotype.shape[0]).reshape((
         number_of_variable_terms, number_of_total_terms, genotype.shape[0]))
     variable_term_index = 0
-    # Have to add extra columns to the covariates
+    # Have to add extra columns to the covariates.single
 
     covariates = np.tile(covariates, (genotype.shape[0],1,1))
 
@@ -111,10 +111,10 @@ def calculate_variant_dependent_a(genotype, factor_matrix,
         # Multiply the genotypes with the factor column
         interaction_values = genotype * factor_column
         # This creates a 2d array with columns representing the
-        # variants and values representing the covariates from individuals
+        # variants and values representing the covariates.single from individuals
 
         # Calculate the A values for interaction values and other independent
-        # determinants already in covariates matrix
+        # determinants already in covariates.single matrix
         sec = calculate_dot_product_for_variants(covariates, interaction_values)
         tr = np.sum(np.power(interaction_values, 2), axis=1).reshape(-1, 1)
 
@@ -148,8 +148,8 @@ def calculate_variant_dependent_a(genotype, factor_matrix,
 def calculate_dot_product_for_variants(covariates, other_independent_determinant):
     # In the dot einsum notation, labels represent the following:
     # i: variants
-    # j: individuals (dot product of genotypes, covariates)
-    # k: different covariates
+    # j: individuals (dot product of genotypes, covariates.single)
+    # k: different covariates.single
     sec = np.einsum('ij,ijk->ik', other_independent_determinant, covariates)
     # (Values get summed along individuals)
     return sec
@@ -288,7 +288,7 @@ def hase_supporting_interactions(b_variable, a_inverse, b_cov, C, number_of_cons
         # j: Terms
         # k: Phenotype
         BT_A1B_nonconst = np.einsum(
-            'ijk,ijk->ik', b_variable.transpose((1,0,2)),
+            'ijk,ijk->ik', b_variable.transpose((1, 0, 2)),
             A1_B_full[:, (number_of_constant_terms):number_of_constant_terms + number_of_variable_terms, :])
 
         # Combine the constant and nonconstant parts of the BT, beta matrix

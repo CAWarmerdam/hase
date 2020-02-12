@@ -66,17 +66,20 @@ class Encoder(object):
 			raise ValueError('data_type is None')
 		elif data_type=="genotype":
 			# If the data is genotype data, encode using F
-			print ('Encoding genotype')
+			print ('Encoding genotype data')
 			return np.dot(data,self.F)
 		elif data_type=='phenotype':
 			# If the data is phenotype data, encode using the inverse of F.
-			print ('Encoding phenotype')
+			print ('Encoding phenotype data')
 			return np.dot(self.F_inv,data)
 
 
 	def save_npy(self,data, save_path=None, info=None, index=None):
-		if isinstance(save_path,type(None)) or  not os.path.isdir(save_path):
-			raise ValueError('There is no such path or directory {}'.format(save_path))
+		if isinstance(save_path,type(None)):
+			raise ValueError('Path cannot be none {}'.format(save_path))
+		save_path = os.path.join(self.out, save_path)
+		if os.path.isdir(save_path) is False:
+			os.mkdir(save_path)
 		np.save(os.path.join(save_path,str(self.npy_iter[save_path])+'_'+self.study_name+ '.npy'),data )
 		if self.phen_info_dic['id'] is None:
 			self.phen_info_dic['id']=np.array(info._data.id)[index]
@@ -84,8 +87,11 @@ class Encoder(object):
 		self.npy_iter[save_path] += 1
 
 	def save_csv(self,data,save_path=None, info=None, index=None):
-		if isinstance(save_path,type(None)) or  not os.path.isdir(save_path):
-			raise ValueError('There is no such path or directory {}'.format(save_path))
+		if isinstance(save_path,type(None)):
+			raise ValueError('Path cannot be none {}'.format(save_path))
+		save_path = os.path.join(self.out, save_path)
+		if os.path.isdir(save_path) is False:
+			os.mkdir(save_path)
 		df=pd.DataFrame(data)
 		df.columns=info._data.names[info._data.start:info._data.finish]
 		df.insert(0,'id',np.array(info._data.id)[index])
@@ -96,6 +102,13 @@ class Encoder(object):
 
 	def save_hdf5(self,data, save_path=None,info=None, index=None):
 		#only for genetics data
+
+		if isinstance(save_path,type(None)):
+			raise ValueError('Path cannot be none {}'.format(save_path))
+		save_path = os.path.join(self.out, save_path)
+		if os.path.isdir(save_path) is False:
+			os.mkdir(save_path)
+
 		print ('Saving data to ... {}'.format(os.path.join(save_path,str(self.hdf5_iter)+'_'+self.study_name+'_encoded.h5')))
 
 		if not os.path.isfile(os.path.join(self.out,'encode_individuals',self.study_name + '.h5'  )):

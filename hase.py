@@ -33,7 +33,10 @@ HEAD += "* Erasmus MC, Rotterdam /  Department of Medical Informatics, Radiology
 HEAD += "* GNU General Public License v3\n"
 HEAD += "*********************************************************************\n"
 
-if __name__ == '__main__':
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
 
     start = time.time()
 
@@ -133,7 +136,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-mapper_chunk', type=int, help='Change mapper chunk size from config file')
     ###
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not args.thr:
         print ('WARNING!!! You did not set threshold for t-value, all results will be saved')
     if args.mapper_chunk:
@@ -233,7 +236,7 @@ if __name__ == '__main__':
                     genotype = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, genotype)
                     genotype = genotype[:, row_index[0]]
                     encode_genotype = e.encode(genotype, data_type='genotype')
-                    e.save_hdf5(encode_genotype, os.path.join(args.out, 'encode_genotype'), info=gen.folder,
+                    e.save_hdf5(encode_genotype, os.path.join('encode_genotype'), info=gen.folder,
                                 index=row_index[0])
                     encode_genotype = None
                     gc.collect()
@@ -260,11 +263,11 @@ if __name__ == '__main__':
                                 np.multiply(phenotype, interaction_phenotype_values[:, i]), data_type='phenotype')
                             if interactions.folder.format == '.npy':
                                 e.save_npy(encode_product_of_phenotype_and_interaction_values,
-                                           save_path=os.path.join(args.out, 'encode_interaction'),
+                                           save_path=os.path.join('encode_interaction', interactions.folder._data.names[i]),
                                            info=phen.folder, index=row_index[2])
                             if interactions.folder.format in ['.csv', '.txt']:
                                 e.save_csv(encode_product_of_phenotype_and_interaction_values,
-                                           save_path=os.path.join(args.out, 'encode_interaction'),
+                                           save_path=os.path.join('encode_interaction', interactions.folder._data.names[i]),
                                            info=phen.folder, index=row_index[2])
 
                     if isinstance(phenotype, type(None)):
@@ -273,10 +276,10 @@ if __name__ == '__main__':
                     encode_phenotype = e.encode(phenotype, data_type='phenotype')
 
                     if phen.folder.format == '.npy':
-                        e.save_npy(encode_phenotype, save_path=os.path.join(args.out, 'encode_phenotype'),
+                        e.save_npy(encode_phenotype, save_path=os.path.join('encode_phenotype'),
                                    info=phen.folder, index=row_index[1])
                     if phen.folder.format in ['.csv', '.txt']:
-                        e.save_csv(encode_phenotype, save_path=os.path.join(args.out, 'encode_phenotype'),
+                        e.save_csv(encode_phenotype, save_path=os.path.join('encode_phenotype'),
                                    info=phen.folder, index=row_index[1])
                     encode_phenotype = None
                     gc.collect()
@@ -672,6 +675,10 @@ if __name__ == '__main__':
         Analyser.out = args.out
         haseregression(phen, gen, cov, mapper, Analyser, args.maf, intercept=args.intercept, interaction=interaction)
 
-end = time.time()
+    end = time.time()
 
-print ('experiment finished in {} s'.format((end - start)))
+    print ('experiment finished in {} s'.format((end - start)))
+
+
+if __name__ == '__main__':
+    sys.exit(main())

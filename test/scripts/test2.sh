@@ -35,7 +35,7 @@ ln -s ${ROOTPATH}${STUDYNAME2}/mapper/flip_ref_ES_${STUDYNAME2}.npy ${OUT}/mappe
 if [ -e "${ROOTPATH}/OUTPUT/${STUDYNAME1}/PD_with_b4/${STUDYNAME1}_b4.npy" ] && [ -e "${ROOTPATH}/OUTPUT/${STUDYNAME2}/PD_with_b4/${STUDYNAME2}_b4.npy" ]
 then
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_with_b4/ \
 -g ${ROOTPATH}${STUDYNAME1}/${STUDYNAME1} ${ROOTPATH}${STUDYNAME2}/${STUDYNAME2} \
@@ -49,7 +49,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 
 fi
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_without_b4/ \
 -g ${ROOTPATH}${STUDYNAME1}/${STUDYNAME1} ${ROOTPATH}${STUDYNAME2}/${STUDYNAME2} \
@@ -61,7 +61,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 -mapper ${OUT}/mapper/ \
 -encoded 0 0
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_without_b4_reverse/ \
 -g ${ROOTPATH}${STUDYNAME2}/${STUDYNAME2} ${ROOTPATH}${STUDYNAME1}/${STUDYNAME1} \
@@ -75,7 +75,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 
 
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_encode/ \
 -g ${ROOTPATH}/OUTPUT/${STUDYNAME1}/encode/study/ ${ROOTPATH}/OUTPUT/${STUDYNAME2}/encode/study/ \
@@ -89,7 +89,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 
 
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_encode_reverse/ \
 -g ${ROOTPATH}/OUTPUT/${STUDYNAME2}/encode/study/ ${ROOTPATH}/OUTPUT/${STUDYNAME1}/encode/study/ \
@@ -103,7 +103,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 
 
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_encode_10/ \
 -g ${ROOTPATH}/OUTPUT/${STUDYNAME1}/encode/study/ ${ROOTPATH}${STUDYNAME2}/${STUDYNAME2} \
@@ -115,7 +115,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 -mapper ${OUT}/mapper/ \
 -encoded 1 0
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_encode_01/ \
 -g ${ROOTPATH}${STUDYNAME1}/${STUDYNAME1} ${ROOTPATH}/OUTPUT/${STUDYNAME2}/encode/study/ \
@@ -128,7 +128,7 @@ python  ${HASEROOT}/model.py -mode meta-stage \
 -encoded 0 1
 
 
-python  ${HASEROOT}/model.py -mode meta-stage \
+python  ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_without_b4_effect/ \
 -g ${ROOTPATH}${STUDYNAME1}/${STUDYNAME1} ${ROOTPATH}${STUDYNAME2}/${STUDYNAME2} \

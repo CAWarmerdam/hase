@@ -35,7 +35,7 @@ mkdir -p ${OUT}/summary_MA_without_b4_cluster/
 mkdir -p ${OUT}/summary_MA_with_b4_cluster/
 
 
-python ${HASEROOT}/model.py -mode encoding \
+python ${HASEROOT}/hase.py -mode encoding \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -study_name ${STUDYNAME} \
 -o ${OUT}/encode/ \
@@ -46,12 +46,12 @@ python ${HASEROOT}/model.py -mode encoding \
 
 
 
-python ${HASEROOT}/model.py -mode regression \
+python ${HASEROOT}/hase.py -mode regression \
 -th 0 \
 -o ${OUT}/regression/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -ref_name ref_ES \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
 -study_name ${STUDYNAME} \
@@ -60,12 +60,12 @@ python ${HASEROOT}/model.py -mode regression \
 
 
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_with_b4/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
@@ -73,12 +73,12 @@ python ${HASEROOT}/model.py -mode single-meta \
 -pd_full
 
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_with_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
@@ -87,12 +87,12 @@ python ${HASEROOT}/model.py -mode single-meta \
 -cluster y \
 -node 2 1
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_with_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
@@ -103,12 +103,12 @@ python ${HASEROOT}/model.py -mode single-meta \
 
 
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_without_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
@@ -116,12 +116,12 @@ python ${HASEROOT}/model.py -mode single-meta \
 -cluster y \
 -node 3 1
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_without_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
@@ -129,12 +129,12 @@ python ${HASEROOT}/model.py -mode single-meta \
 -cluster y \
 -node 3 2
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_without_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/ \
@@ -143,12 +143,12 @@ python ${HASEROOT}/model.py -mode single-meta \
 -node 3 3
 
 
-python ${HASEROOT}/model.py -mode single-meta \
+python ${HASEROOT}/hase.py -mode single-meta \
 -th 0 \
 -o ${OUT}/PD_without_b4/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
 -ph ${ROOTPATH}${STUDYNAME}/phenotype/ \
--cov ${ROOTPATH}${STUDYNAME}/covariates.single/ \
+-cov ${ROOTPATH}${STUDYNAME}/covariates/ \
 -study_name ${STUDYNAME} \
 -maf 0 \
 -ref_name ref_ES \
@@ -164,7 +164,7 @@ rm ${OUT}/PD_with_b4/phen_id.txt
 rm ${OUT}/PD_with_b4/gen_id.txt
 rm ${OUT}/PD_with_b4/cov_id.txt
 
-python ${HASEROOT}/model.py -mode meta-stage \
+python ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_with_b4/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
@@ -175,7 +175,7 @@ python ${HASEROOT}/model.py -mode meta-stage \
 -ref_name ref_ES \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/
 
-python ${HASEROOT}/model.py -mode meta-stage \
+python ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_without_b4/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
@@ -196,7 +196,7 @@ rm ${OUT}/PD_with_b4_cluster/phen_id.txt
 rm ${OUT}/PD_with_b4_cluster/gen_id.txt
 rm ${OUT}/PD_with_b4_cluster/cov_id.txt
 
-python ${HASEROOT}/model.py -mode meta-stage \
+python ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_with_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
@@ -207,7 +207,7 @@ python ${HASEROOT}/model.py -mode meta-stage \
 -ref_name ref_ES \
 -mapper ${ROOTPATH}${STUDYNAME}/mapper/
 
-python ${HASEROOT}/model.py -mode meta-stage \
+python ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_without_b4_cluster/ \
 -g ${ROOTPATH}${STUDYNAME}/${STUDYNAME} \
@@ -230,7 +230,7 @@ mv ${OUT}/encode/encode_individuals/* ${OUT}/encode/study/individuals/
 cp ${ROOTPATH}${STUDYNAME}/${STUDYNAME}/probes/* ${OUT}/encode/study/probes/
 
 
-python ${HASEROOT}/model.py -mode meta-stage \
+python ${HASEROOT}/hase.py -mode meta-stage \
 -th 0 \
 -o ${OUT}/MA_encode/ \
 -g ${OUT}/encode/study/ \

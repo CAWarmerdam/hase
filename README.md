@@ -21,6 +21,10 @@ Navigate to directory where you want to install HASE and clone this repository:
 ## User Guide
 Use [this wiki](https://github.com/roshchupkin/hase/wiki) for the, original, upstream wiki. Or [this wiki](https://github.com/CAWarmerdam/hase/wiki/Running-HASE-meta-analysis-in-the-example-study) for a guide on using hase with the example data.
 
+### Usage notes
+- Variants that do not have any variance across the samples are to be removed as this will cause an exception.
+- Tests have made apparent that converting VCF and PLINK files not always result in correct HDF5 files. It is recommended to check this prior to proceeding analysis.
+
 ## Changes from the upstream repository
 - Fixed bug causing an exception when more than 1000 individuals were used.
 - Resolved bug causing the `--intercept` option having no effect.

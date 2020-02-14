@@ -26,7 +26,7 @@ Navigate to directory where you want to install HASE and clone this repository:
 - Resolved bug causing the `--intercept` option having no effect.
 - Made version numbers of pip packages explicit.
 
-### Interaction development branch
+### Interactions development branch
 - Implemented the possibility for using interaction terms.
 - Started implementing tests for both using, and not using interaction terms.
 

@@ -25,6 +25,7 @@ Use [this wiki](https://github.com/roshchupkin/hase/wiki) for the, original, ups
 - Fixed bug causing an exception when more than 1000 individuals were used.
 - Resolved bug causing the `--intercept` option having no effect.
 - Made version numbers of pip packages explicit.
+- Added commentary to code in places.
 
 ### Interactions development branch
 - Implemented the possibility for using interaction terms.

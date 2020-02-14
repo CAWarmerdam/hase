@@ -15,16 +15,20 @@ Navigate to directory where you want to install HASE and clone this repository:
     ```
     export HDF5_DIR=~/hdf5<version-number>/hdf5/
     ```
-
-2. HASE uses [python](https://www.python.org/downloads/) 2.7
-3. To install the required packages, use `pip install -r requirements.txt`. Where `requirements.txt` is located within this HASE repository.
+2. HASE uses [python](https://www.python.org/downloads/) version 2.7
+3. To install the required packages, use `pip install -r requirements.txt`. Where `requirements.txt` is the file located within the root folder of this repository.
  
 ## User Guide
 [wiki](https://github.com/roshchupkin/hase/wiki) for the upstream wiki. Or [wiki](https://github.com/CAWarmerdam/hase/wiki/Running-HASE-meta-analysis-in-the-example-study) for a guide on using hase with the example data.
 
 ## Changes from the upstream repository
 - Fixed bug causing an exception when more than 1000 individuals were used.
-- Made version numbers of pip packages explicit
+- Resolved bug causing the `--intercept` option having no effect.
+- Made version numbers of pip packages explicit.
+
+### Interaction development branch
+- Implemented the possibility for using interaction terms.
+- Started implementing tests for both using, and not using interaction terms.
 
 ## Citation 
 If you use HASE framework, please cite:

@@ -19,7 +19,7 @@ Navigate to directory where you want to install HASE and clone this repository:
 3. To install the required packages, use `pip install -r requirements.txt`. Where `requirements.txt` is the file located within the root folder of this repository.
  
 ## User Guide
-[wiki](https://github.com/roshchupkin/hase/wiki) for the upstream wiki. Or [wiki](https://github.com/CAWarmerdam/hase/wiki/Running-HASE-meta-analysis-in-the-example-study) for a guide on using hase with the example data.
+Use [this wiki](https://github.com/roshchupkin/hase/wiki) for the, original, upstream wiki. Or [this wiki](https://github.com/CAWarmerdam/hase/wiki/Running-HASE-meta-analysis-in-the-example-study) for a guide on using hase with the example data.
 
 ## Changes from the upstream repository
 - Fixed bug causing an exception when more than 1000 individuals were used.

@@ -264,6 +264,8 @@ def hase_supporting_interactions(b_variable, a_inverse, b_cov, C, number_of_cons
 
         A1_B_constant = np.tensordot(a_inverse[:, :, 0:(number_of_constant_terms)], B13, axes=([2], [0]))
 
+        print(A1_B_constant[3,...])
+
         # In the einsum notation, the labels represent the following:
         # i: The variant axis
         # j: ...
@@ -293,6 +295,8 @@ def hase_supporting_interactions(b_variable, a_inverse, b_cov, C, number_of_cons
 
         # Combine the constant and nonconstant parts of the BT, beta matrix
         BT_A1B_full = BT_A1B_const + BT_A1B_nonconst
+
+        print(BT_A1B_full[3,...])
 
         # Get the difference between C (dot product of phenotypes) and the matrix of estimates
         C_BTA1B = BT_A1B_full - C.reshape(1, -1)

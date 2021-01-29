@@ -85,6 +85,96 @@ class TestInteractionSupportingHase(unittest.TestCase):
         self.assertTrue(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"t values"], t_stat[0, 0, 0]))
         print("Standard error and t-statistics equal between model and regular regression analysis")
 
+    def test_without_interaction_with_variant_subsetting(self):
+
+        a_cov_1, variant_dependent_a, b_cov_1, C_1, b4_1, matrix_with_determinants_x_1, phenotype_matrix_1 = \
+            get_single_study_data(self.number_of_individuals, self.number_of_variants)
+
+        # Set 3rd variant to be missing in second study
+        missing_variant = 3
+
+        a_cov_2, variant_dependent_a_2, b_cov_2, C_2, b4_2, matrix_with_determinants_x_2, phenotype_matrix_2 = \
+            get_single_study_data(self.number_of_individuals, self.number_of_variants)
+
+        # Set data for missing variant to 0
+        variant_dependent_a_2[missing_variant] = 0
+        b4_2[missing_variant] = 0
+
+        matrix_with_determinants_x = np.concatenate((matrix_with_determinants_x_1, matrix_with_determinants_x_2), axis=0)
+
+        # print(np.isclose(matrix_with_determinants_x[100:200, ...],matrix_with_determinants_x_2))
+        phenotype_matrix = np.concatenate((phenotype_matrix_1, phenotype_matrix_2), axis = 0)
+
+        a_inverse_alternative_1 = get_a_inverse_extended(a_cov_1, variant_dependent_a)
+
+        b_variable_1 = b4_1[np.newaxis, ...]
+
+        number_of_variable_terms = b_variable_1.shape[0]
+
+        N_con = a_inverse_alternative_1.shape[1] - number_of_variable_terms
+
+        DF = (self.number_of_individuals - a_inverse_alternative_1.shape[1])
+
+        t_stat_1, SE_1 = hase_supporting_interactions(b_variable_1, a_inverse_alternative_1, b_cov_1, C_1, N_con, DF)
+
+        a_cov = a_cov_1 + a_cov_2
+        variant_dependent_a += variant_dependent_a_2
+        b_cov = b_cov_1 + b_cov_2
+        C = C_1 + C_2
+        b4 = b4_1 + b4_2
+
+        a_inverse_alternative = get_a_inverse_extended(a_cov, variant_dependent_a)
+        a_inverse_alternative[missing_variant,::] = get_a_inverse_extended(a_cov_1,
+                                                                           variant_dependent_a)[missing_variant,::]
+
+        b_variable = b4[np.newaxis, ...]
+
+        number_of_variable_terms = b_variable.shape[0]
+
+        N_con = a_inverse_alternative.shape[1] - number_of_variable_terms
+
+        # DF = (self.number_of_individuals * 2 - a_inverse_alternative.shape[1])
+
+        sampleCount = np.array([200 for i in range(b4.size)]).reshape(b4.shape)[:, np.newaxis, :]
+        sampleCount[missing_variant,...] = 100
+
+        print(sampleCount)
+
+        DF = (sampleCount - a_inverse_alternative.shape[1])
+
+        t_stat2, SE2 = hase_supporting_interactions(b_variable, a_inverse_alternative, b_cov, C_1, N_con, DF)
+
+        model_table = fit_model(matrix_with_determinants_x[..., 0], phenotype_matrix[..., 0])
+        #
+        # self.assertTrue(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"Standard Errors"], SE2[0, 0, 0]))
+        # self.assertTrue(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"t values"], t_stat2[0, 0, 0]))
+
+        model_table_missing = fit_model(matrix_with_determinants_x_1[..., missing_variant], phenotype_matrix_1[..., 0])
+
+        self.assertTrue(np.isclose(
+            model_table_missing.loc[a_inverse_alternative.shape[1] - 1, u"Standard Errors"],
+            SE_1[missing_variant, 0, 0]))
+
+        self.assertTrue(np.isclose(
+            model_table_missing.loc[a_inverse_alternative.shape[1] - 1, u"t values"],
+            t_stat_1[missing_variant, 0, 0]))
+
+        self.assertTrue(np.isclose(
+            model_table_missing.loc[a_inverse_alternative.shape[1] - 1, u"Standard Errors"],
+            SE2[missing_variant, 0, 0]))
+
+        self.assertTrue(np.isclose(
+            model_table_missing.loc[a_inverse_alternative.shape[1] - 1, u"t values"],
+            t_stat2[missing_variant, 0, 0]))
+
+        print("Standard error and t-statistics equal between model and regular regression analysis")
+
+        # model_table = fit_model(matrix_with_determinants_x[..., 1], phenotype_matrix[..., 1])
+
+        # self.assertTrue(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"Standard Errors"], SE2[0, 0, 0]))
+        # self.assertTrue(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"t values"], t_stat2[0, 0, 0]))
+        # print("Standard error and t-statistics equal between model and regular regression analysis")
+
     def test_with_interactions(self):
         # Get a genotype matrix
         genotype_matrix = get_genotype_matrix(self.number_of_individuals,
@@ -111,6 +201,7 @@ class TestInteractionSupportingHase(unittest.TestCase):
         # Calculate the phenotypes * interaction covariate
         for covariate_array in covariates_matrix.T:
             interaction_phenotype_matrix = np.einsum('ij,i->ij', phenotype_matrix, covariate_array)
+            print(interaction_phenotype_matrix)
             encoded_interaction_phenotype_matrices.append(encoder.encode_with_inverse(
                 interaction_phenotype_matrix))
 
@@ -145,6 +236,9 @@ class TestInteractionSupportingHase(unittest.TestCase):
 
         t_stat, SE = hase_supporting_interactions(b_variable, a_inv, b_cov, C, N_con, DF)
 
+        print(X[..., 0])
+        print(phenotype_matrix[..., 0])
+
         model_table = fit_model(X[..., 0], phenotype_matrix[..., 0])
 
         print(model_table)
@@ -154,6 +248,32 @@ class TestInteractionSupportingHase(unittest.TestCase):
         self.assertTrue(np.isclose(model_table.loc[a_inv.shape[1] - 1, u"Standard Errors"], SE[0, 0, 0]))
         self.assertTrue(np.isclose(model_table.loc[a_inv.shape[1] - 1, u"t values"], t_stat[0, 0, 0]))
         print("Standard error and t-statistics equal between model and regular regression analysis")
+
+
+def get_single_study_data(number_of_individuals, number_of_variants):
+    genotype_matrix = get_genotype_matrix(number_of_individuals,
+                                          number_of_variants)
+    covariates_matrix = get_covariates_matrix(number_of_individuals, 1)  # One covariate
+    covariates_matrix_extended = covariates_matrix.repeat(number_of_variants, axis=1)
+    base_x = np.stack((covariates_matrix_extended, genotype_matrix.T), axis=1)
+    matrix_with_determinants_x = get_x_no_interaction(base_x)
+
+    phenotype_matrix = get_phenotype_matrix_no_interaction(matrix_with_determinants_x)[:, 0:2]
+
+    # Encode the data
+    encoder = EncoderCopy(number_of_individuals)
+    genotype_matrix_encoded = encoder.encode_genotype_matrix(genotype_matrix)
+    phenotype_matrix_encoded = encoder.encode_with_inverse(phenotype_matrix)
+
+    a_cov, variant_dependent_a = get_a_parts_alternative(covariates_matrix, genotype_matrix)
+
+    b_cov = B_covariates(covariates_matrix, phenotype_matrix)
+
+    C = C_matrix(phenotype_matrix)
+
+    b4 = B4(phenotype_matrix_encoded, genotype_matrix_encoded)
+
+    return a_cov, variant_dependent_a, b_cov, C, b4, matrix_with_determinants_x, phenotype_matrix
 
 
 def get_genotype_matrix(number_of_individuals, number_of_variants):
@@ -261,7 +381,7 @@ def test_hase2_no_interaction(number_of_individuals,
     print("Standard error and t-statistics equal between model and regular regression analysis")
 
 
-def calculate_a_alternative(covariates_matrix, genotype_matrix):
+def get_a_parts_alternative(covariates_matrix, genotype_matrix):
     # Get empty matrix of covariate values
     factor_matrix = np.empty((0, 0))
     # Get the constant part of A
@@ -269,6 +389,11 @@ def calculate_a_alternative(covariates_matrix, genotype_matrix):
     variant_dependent_a = calculate_variant_dependent_a(genotype_matrix,
                                                         factor_matrix,
                                                         covariates_matrix)
+    return a_cov, variant_dependent_a
+
+
+def calculate_a_alternative(covariates_matrix, genotype_matrix):
+    a_cov, variant_dependent_a = get_a_parts_alternative(covariates_matrix, genotype_matrix)
     a_inverse_alternative = get_a_inverse_extended(a_cov, variant_dependent_a)
     return a_inverse_alternative
 

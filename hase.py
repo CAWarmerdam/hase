@@ -38,6 +38,8 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
+    global MAPPER_CHUNK_SIZE
+
     start = time.time()
 
     parser = argparse.ArgumentParser(description='Script to use HASE in command line')
@@ -218,6 +220,11 @@ def main(argv=None):
         e = Encoder(args.out)
         e.study_name = args.study_name[0]
 
+        # The following function identifies for every sample what the index of the sample is in each data source.
+        # row_index contains the output with in
+        # row_index[0] the indices for genotype part of the samples, in
+        # row_index[1] the indices for the phenotype part of the samples, and in
+        # row_index[2] the indices for the interaction part of the samples if available.
         row_index, intersecting_identifiers = study_indexes(phenotype=phen.folder._data, genotype=gen.folder._data,
                                                             covariates=interactions.folder._data if interactions else None)
         with Timer() as t:
@@ -260,7 +267,7 @@ def main(argv=None):
                             # dimensions as the phenotype data. This results in the correct 2d array to encode using
                             # the inverse of F
                             encode_product_of_phenotype_and_interaction_values = e.encode(
-                                np.multiply(phenotype, interaction_phenotype_values[:, i]), data_type='phenotype')
+                                np.einsum('ij,i->ij', phenotype, interaction_phenotype_values[:, i]), data_type='phenotype')
                             if interactions.folder.format == '.npy':
                                 e.save_npy(encode_product_of_phenotype_and_interaction_values,
                                            save_path=os.path.join('encode_interaction', interactions.folder._data.names[i]),
@@ -445,6 +452,7 @@ def main(argv=None):
                         row_index["covariates"].shape[0],
                         np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders])))
 
+        # Start looping over all genotype chunks
         while True:
             if mapper.cluster == 'n':
                 SNPs_index, keys = mapper.get()
@@ -562,6 +570,7 @@ def main(argv=None):
                     # If the encoded interactions are supplied add these to the b_variable part.
                     if encoded_interactions:
                         interaction_phenotype_values, phen_names = encoded_interactions.get()
+                        interaction_phenotype_values = interaction_phenotype_values[row_index["interaction"], :]
                         interaction_values = B4(interaction_phenotype_values, genotype)
                         b_variable = np.append(b_variable, [interaction_values], axis=0)
 

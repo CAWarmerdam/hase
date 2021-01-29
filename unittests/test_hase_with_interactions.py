@@ -52,7 +52,8 @@ def get_sklearn_regression_difference(resources_directory, hase_results):
 class HaseInteractionTestCase(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory
-        self.test_dir = tempfile.mkdtemp()
+        #self.test_dir = tempfile.mkdtemp()
+        self.test_dir = "/var/folders/ch/xw_1fk6j2v95btsrlchx63h40000gn/T/tmpa0Caye"
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
 
@@ -75,46 +76,52 @@ class HaseInteractionTestCase(unittest.TestCase):
         # Start by running mapper?
         mapper_directory = os.path.join(self.test_dir, "mapper", "")
         hdf5_genotype_directory = os.path.join(self.resources_dir, "exampledataset", "genotypes_hdf5")
-        mapper.main(["-g", hdf5_genotype_directory,
-                     "-study_name", "dosage",
-                     "-o", mapper_directory])
+        # mapper.main(["-g", hdf5_genotype_directory,
+        #              "-study_name", "dosage",
+        #              "-o", mapper_directory])
 
         # Encode the genotype and phenotype files
         encoding_output = os.path.join(self.test_dir, "encoded")
         phenotype_matrix = os.path.join(self.resources_dir, "exampledataset", "phenotype")
-        hase.main(["-g", hdf5_genotype_directory,
-                   "-study_name", "dosage",
-                   "-o", encoding_output,
-                   "-mapper", mapper_directory,
-                   "-ph", phenotype_matrix,
-                   "-mode" "encoding"])
+        # hase.main(["-g", hdf5_genotype_directory,
+        #            "-study_name", "dosage",
+        #            "-o", encoding_output,
+        #            "-mapper", mapper_directory,
+        #            "-ph", phenotype_matrix,
+        #            "-mode", "encoding"])
 
         # Calculate partial derivatives
         partial_derivatives = os.path.join(self.test_dir, "pd")
-        hase.main(["-g", hdf5_genotype_directory,
-                   "-study_name", "dosage",
-                   "-o", partial_derivatives,
-                   "-mapper", mapper_directory,
-                   "-ph", phenotype_matrix,
-                   "-cov", os.path.join(self.resources_dir, "exampledataset", "covariates"),
-                   "-mode" "encoding"])
+        # hase.main(["-g", hdf5_genotype_directory,
+        #            "-study_name", "dosage",
+        #            "-o", partial_derivatives,
+        #            "-mapper", mapper_directory,
+        #            "-ph", phenotype_matrix,
+        #            "-cov", os.path.join(self.resources_dir, "exampledataset", "covariates"),
+        #            "-mode", "single-meta"])
 
         # Create directory structure required for meta-analysis
         # Define directory names.
-        genotype_meta = os.path.join(self.test_dir, "meta", "genotype_encoded")
+        meta = os.path.join(self.test_dir, "meta")
+        genotype_meta = os.path.join(meta, "genotype_encoded")
         individuals_meta = os.path.join(genotype_meta, "individuals")
         actual_genotype_meta = os.path.join(genotype_meta, "genotype")
-        phenotype_meta = os.path.join(self.test_dir, "meta", "phenotype")
-        partial_derivatives_meta = os.path.join(self.test_dir, "meta", "pd_shared")
+        phenotype_meta = os.path.join(meta, "phenotype")
+        partial_derivatives_meta = os.path.join(meta, "pd_shared")
+
+        # Copy the probes to genotype_meta. This calls os.makedirs() always,
+        # and throws an exception if it already exists.
+        # First we remove the genotype_meta if it does already exist
+        shutil.rmtree(meta)
+        shutil.copytree(os.path.join(hdf5_genotype_directory, "probes"), os.path.join(genotype_meta, "probes"))
 
         # Make the required directories
-        os.mkdir(actual_genotype_meta)
-        os.mkdir(individuals_meta)
-        os.mkdir(partial_derivatives_meta)
-        os.mkdir(phenotype_meta)
+        # os.makedirs(actual_genotype_meta)
+        os.makedirs(individuals_meta)
+        os.makedirs(partial_derivatives_meta)
+        os.makedirs(phenotype_meta)
 
         # Copy the required data
-        shutil.copytree(os.path.join(hdf5_genotype_directory, "probes"), genotype_meta)
         distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_individuals"), individuals_meta)
         distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_genotype"), actual_genotype_meta)
         distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_phenotype"), phenotype_meta)
@@ -126,7 +133,114 @@ class HaseInteractionTestCase(unittest.TestCase):
         hase.main(["-g", genotype_meta, "-study_name", "dosage",
                    "-ph", phenotype_meta, "-derivatives", partial_derivatives_meta,
                    "-mapper", mapper_directory, "-o", results_directory,
-                   "-mode" "meta-stage"])
+                   "-mode", "meta-stage"])
+
+        # (Generate the output file)
+
+        # Read in the actual results
+        hase_results = get_hase_results(results_directory)
+        # Read in the expected results
+        difference = get_sklearn_regression_difference(self.resources_dir, hase_results)
+
+
+class HaseInteractionActualTestCase(unittest.TestCase):
+    def setUp(self):
+        # Create a temporary directory
+        #self.test_dir = tempfile.mkdtemp()
+        self.test_dir = "/var/folders/ch/xw_1fk6j2v95btsrlchx63h40000gn/T/tmpa0Caye"
+        self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
+        self.project_root = os.path.dirname(os.path.dirname(__file__))
+
+    def tearDown(self):
+        pass
+        #shutil.rmtree(self.test_dir)
+
+    def test_get_sklearn_regression_results(self):
+        get_sklearn_regression_difference(self.resources_dir,
+                                          hase_results=get_hase_results(os.path.join(
+                                           self.resources_dir, "exampledataset", "hase_results")))
+
+    def test_meta_analysis(self):
+        # Reference for mapper has to be downloaded
+        assert os.path.isfile(
+            os.path.join(self.project_root, "data", "1000Gp1v3.ref.gz"))
+        assert os.path.isfile(
+            os.path.join(self.project_root, "data", "1000Gp1v3.ref_info.h5"))
+
+        # Start by running mapper?
+        mapper_directory = os.path.join(self.test_dir, "mapper", "")
+        hdf5_genotype_directory = os.path.join(self.resources_dir, "exampledataset", "genotypes_hdf5")
+        # mapper.main(["-g", hdf5_genotype_directory,
+        #              "-study_name", "dosage",
+        #              "-o", mapper_directory])
+
+        # Encode the genotype and phenotype files
+        encoding_output = os.path.join(self.test_dir, "encoded")
+        phenotype_matrix = os.path.join(self.resources_dir, "exampledataset", "phenotype")
+        cov_interaction_matrix = os.path.join(self.resources_dir, "exampledataset", "covariates")
+        # hase.main(["-g", hdf5_genotype_directory,
+        #            "-study_name", "dosage",
+        #            "-o", encoding_output,
+        #            "-mapper", mapper_directory,
+        #            "-ph", phenotype_matrix,
+        #            "-interaction", cov_interaction_matrix,
+        #            "-mode", "encoding"])
+
+        # Calculate partial derivatives
+        partial_derivatives = os.path.join(self.test_dir, "pd")
+        # hase.main(["-g", hdf5_genotype_directory,
+        #            "-study_name", "dosage",
+        #            "-o", partial_derivatives,
+        #            "-mapper", mapper_directory,
+        #            "-ph", phenotype_matrix,
+        #            "-cov", cov_interaction_matrix,
+        #            "-interaction", cov_interaction_matrix,
+        #            "-mode", "single-meta"])
+
+        # Create directory structure required for meta-analysis
+        # Define directory names.
+        meta = os.path.join(self.test_dir, "meta")
+        genotype_meta = os.path.join(meta, "genotype_encoded")
+        individuals_meta = os.path.join(genotype_meta, "individuals")
+        actual_genotype_meta = os.path.join(genotype_meta, "genotype")
+        phenotype_meta = os.path.join(meta, "phenotype")
+        interaction_meta = os.path.join(meta, "interaction")
+        partial_derivatives_meta = os.path.join(meta, "pd_shared")
+
+        # Copy the probes to genotype_meta. This calls os.makedirs() always,
+        # and throws an exception if it already exists.
+        # First we remove the genotype_meta if it does already exist
+        shutil.rmtree(meta)
+        shutil.copytree(os.path.join(hdf5_genotype_directory, "probes"), os.path.join(genotype_meta, "probes"))
+
+        # Make the required directories
+        # os.makedirs(actual_genotype_meta)
+        os.makedirs(individuals_meta)
+        os.makedirs(partial_derivatives_meta)
+        os.makedirs(phenotype_meta)
+        os.makedirs(interaction_meta)
+
+        # Copy the required data
+        distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_individuals"), individuals_meta)
+        distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_genotype"), actual_genotype_meta)
+        distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_phenotype"), phenotype_meta)
+        distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_interaction"), interaction_meta)
+        for file in glob.glob(os.path.join(partial_derivatives, "*.npy")):
+            shutil.copy(file, partial_derivatives_meta)
+
+        # Perform meta-analysis
+        results_directory = os.path.join(self.test_dir, "results")
+        hase.main(["-g", genotype_meta,
+                   "-study_name", "dosage",
+                   "-ph", phenotype_meta,
+                   "-interaction_encoded",
+                   os.path.join(interaction_meta, "cov_0"),
+                   os.path.join(interaction_meta, "cov_1"),
+                   os.path.join(interaction_meta, "cov_2"),
+                   "-derivatives", partial_derivatives_meta,
+                   "-mapper", mapper_directory,
+                   "-o", results_directory,
+                   "-mode", "meta-stage"])
 
         # (Generate the output file)
 

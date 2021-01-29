@@ -493,6 +493,9 @@ def main(argv=None):
                 if is_no_b4_present_in_partial_derivatives:
                     a_test, b_cov, C, a_cov = meta_pard.get(variant_indices=SNPs_index, regression_model=regression_model,
                                                             random_effect_intercept=args.effect_intercept)
+                    a_complete, b_cov_expanded, c_complete = meta_pard.get_expanded(
+                        variant_indices=SNPs_index, regression_model=regression_model,
+                        random_effect_intercept=args.effect_intercept)
                 else:
                     a_test, b_cov, C, a_cov, b4 = meta_pard.get(variant_indices=SNPs_index, B4=True,
                                                                 regression_model=regression_model,

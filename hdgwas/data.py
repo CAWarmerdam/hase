@@ -509,16 +509,16 @@ class MetaParData(object):
         if (np.std(maf, axis=1) > 0.1).any():
             raise ValueError('MAF is not consistent between PD data!')
 
-    def get(self, SNPs_index=None, B4=False, regression_model=None, random_effect_intercept=False):
+    def get(self, variant_indices=None, B4=False, regression_model=None, random_effect_intercept=False):
 
         if self.pd is None:
             raise ValueError('Data not defined!')
         k = self.pd.keys()
-        if SNPs_index is not None:
-            if len(self.pd) != len(SNPs_index):
+        if variant_indices is not None:
+            if len(self.pd) != len(variant_indices):
                 raise ValueError(
-                    'There are not equal number od PD and SNPs indexes {}!={}'.format(len(self.pd), len(SNPs_index)))
-            a_test, b_cov, C, a_cov = self.pd[k[0]].get(gen_order=SNPs_index[0], phen_order=self.phen_order[k[0]],
+                    'There are not equal number od PD and SNPs indexes {}!={}'.format(len(self.pd), len(variant_indices)))
+            a_test, b_cov, C, a_cov = self.pd[k[0]].get(gen_order=variant_indices[0], phen_order=self.phen_order[k[0]],
                                                         cov_order=self.cov_order[k[0]])
             if random_effect_intercept and len(self.pd) > 1:  # TODO (high)
                 a_test_effect = a_test[:, 0:1]
@@ -528,13 +528,13 @@ class MetaParData(object):
             raise ValueError('Indexes are not defined!')
 
         if B4:
-            b4 = self.pd[k[0]].folder._data.b4[SNPs_index[0], :]
+            b4 = self.pd[k[0]].folder._data.b4[variant_indices[0], :]
             b4 = b4[:, self.phen_order[k[0]]]
 
         # self.check_maf(SNPs_index)
 
         for i in range(1, len(self.pd)):
-            a, b, c, a_c = self.pd[k[i]].get(gen_order=SNPs_index[i], phen_order=self.phen_order[k[i]],
+            a, b, c, a_c = self.pd[k[i]].get(gen_order=variant_indices[i], phen_order=self.phen_order[k[i]],
                                              cov_order=self.cov_order[k[i]])
             self.check_pd([a_test, b_cov, C, a_cov], [a, b, c, a_c])
             a_test = a_test + a
@@ -546,7 +546,7 @@ class MetaParData(object):
                 b_cov_effect = np.vstack((b_cov_effect, b[0:1, :]))
                 a_cov_effect = np.vstack((a_cov_effect, a_c[0:1, :]))
             if B4:
-                b4_tmp = self.pd[k[i]].folder._data.b4[SNPs_index[i], :]
+                b4_tmp = self.pd[k[i]].folder._data.b4[variant_indices[i], :]
                 b4 = b4 + b4_tmp[:, self.phen_order[k[i]]]
 
         if random_effect_intercept and len(self.pd) > 1:

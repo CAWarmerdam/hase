@@ -680,7 +680,7 @@ class Mapper(object):
         return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys
 
     # @timing
-    def get(self, chunk_number=None, allow_missingness = False):
+    def get(self, chunk_number=None, allow_missingness=False):
 
         if isinstance(self.keys, type(None)) and isinstance(self.values, type(None)):
             raise ValueError('mapper data is not loaded!')
@@ -738,7 +738,7 @@ class Mapper(object):
             # Get the indices for those values that are present in ANY studies
             # Values that are greater than -1 are present
             all_indices_for_values_with_all_studies_available = np.where(
-                (self.values[start:,:] > -1).any(axis=1))
+                (self.values[start:, :] > -1).any(axis=1))
         else:
             # Get the indices for those values that are present in ALL studies
             # Values that are greater than -1 are present
@@ -762,7 +762,6 @@ class Mapper(object):
                 finish = self.processed + self.chunk_size if (self.processed + self.chunk_size) \
                                                              < self.n_keys else self.n_keys
                 self.processed = finish
-                print(start, finish)
             else:
                 ch = self.chunk_pop()
                 if ch is not None:
@@ -1006,18 +1005,11 @@ def merge_genotype(genotype, SNPs_index, mapper, flip_flag=True):
             raise ValueError('There are not equal number of genotypes and SNPs indexes {}!={}'.format(len(genotype),
                                                                                                       len(SNPs_index)))
         gen = np.zeros((len(SNPs_index[0]), np.sum([i.folder._data.id.shape[0] for i in genotype])))
-        a, b = 0, genotype[0].folder._data.id.shape[0]
-        gen[:, a:b] = genotype[0].get(SNPs_index[0], impute=mapper.encoded.get(genotype[0].folder.name, 0))
-        a = b
-        print gen.shape
-        if flip_flag:
-            if not mapper.encoded.get(genotype[0].folder.name, 0):
-                flip = mapper.flip[genotype[0].folder.name][SNPs_index[0]]
-                flip_index = (flip == -1)
-                gen = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, gen)
-        for i in range(1, len(genotype)):
-            g = genotype[i].get(SNPs_index[i], impute=mapper.encoded.get(genotype[i].folder.name, 0))
-            print g.shape
+        a = 0
+        b = 0
+        for i in range(0, len(genotype)):
+            g = genotype[i].get(SNPs_index[i], impute=False)
+            print(gen.shape)
             b += g.shape[1]
             if flip_flag:
                 if not mapper.encoded.get(genotype[i].folder.name, 0):
@@ -1025,6 +1017,7 @@ def merge_genotype(genotype, SNPs_index, mapper, flip_flag=True):
                     flip_index = (flip == -1)
                     g = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, g)
 
+            g[np.where(SNPs_index[i] == -1), :] = 0
             gen[:, a:b] = g
             a = b
 

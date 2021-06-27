@@ -155,6 +155,84 @@ def calculate_dot_product_for_variants(covariates, other_independent_determinant
     return sec
 
 
+def expand_B_covariates(b_cov, variant_indices):
+    pass
+
+
+def a_inverse_extended_allow_missingness(variant_dependent_a, constant_a, variant_indices):
+    variant_indices_arr = np.array(variant_indices).T
+
+    # Obtain the dimensions of an expanded constant_a
+    number_of_variants = variant_indices[0].shape[0]
+
+    # Define empty array of dimensions nVariants, dim(constant_a)
+    a_covariates_expanded = np.repeat(
+        np.array(constant_a)[np.newaxis, ...],
+        number_of_variants, axis = 0)
+
+    a_covariates_expanded[variant_indices_arr == -1, :, :] = 0
+
+    # For every variant, sum the A_cov's for every study
+    a_covariates_expanded = np.sum(a_covariates_expanded, axis = 1)
+
+    a_inverse_list = []
+
+    n, m = constant_a[0].shape
+    if variant_dependent_a.ndim == 2:
+        variant_dependent_a = variant_dependent_a[:, :, np.newaxis]
+    k = n + variant_dependent_a.shape[2]
+
+    for i in range(variant_dependent_a.shape[0]):
+        a_complete = np.zeros(k*k).reshape(k,k)
+        a_complete[0:n, 0:n] = a_covariates_expanded[i, ...]
+        a_complete[:, n:k] = variant_dependent_a[i, :]
+        a_complete[n:k, :k-1] = np.maximum(a_complete[n:k, :k-1],
+                                    variant_dependent_a[i,:k-1].T)
+        try:
+            a_inverse_list.append(np.linalg.inv(a_complete))
+        except:
+            a_inverse_list.append(np.zeros(k * k).reshape(k, k))  # TODO (high) test; check influence on results; warning;
+    return np.array(a_inverse_list)
+
+
+def expand_C_matrix(c_stack, variant_indices):
+    pass
+
+
+def expand_sample_size_matrix(sample_size, variant_indices, phenotype_indices=None):
+    """
+    Function that expands sample sizes per cohort to sample sizes per variant x phenotype combination.
+
+    :param sample_size: List of sample size per cohort.
+    :param variant_indices: List of np.array objects listing variant indices (-1 when missing)
+    :param phenotype_indices: List of np.array objects listing phenotype indices (-1 when missing)
+    :return: matrix of dimensions nVariants * nPhenotypes, with every combination portraying the number
+    of samples available to test that combination.
+    """
+    # Get the number of variants. (across 0th dimension, should be equal for all cohorts in the list)
+    number_of_variants = variant_indices[0].shape[0]
+
+    # Expand the sample size across all variants across a new 1st axis
+    sample_size_expanded = np.array(sample_size)[:, np.newaxis].repeat(number_of_variants, 1)
+
+    # Set cohort sample size to 0 for variants that are missing (-1) for that cohort
+    sample_size_expanded[np.array(variant_indices) == -1] = 0
+
+    # Expand the sample size across all phenotypes if the indices are not none
+    if phenotype_indices is not None:
+
+        # Get the number of phenotypes. (across 0th dimension, should be equal for all cohorts in the list)
+        number_of_phenotypes = phenotype_indices[0].shape[0]
+
+        # Expand the sample size across all phenotypes across a new 2nd axis
+        sample_size_expanded = sample_size_expanded[:, :, np.newaxis].repeat(number_of_phenotypes, 2)
+
+        # Set cohort sample size to 0 for phenotypes that are missing (-1) for that cohort
+        sample_size_expanded[np.array(phenotype_indices)[:, np.newaxis, :].repeat(number_of_variants, 1) == -1] = 0
+
+    return np.sum(sample_size_expanded, 0)
+
+
 # @timing
 def B_covariates(covariates, phenotype, intercept=True):
     S, N = covariates.shape
@@ -256,6 +334,92 @@ def HASE(b4, A_inverse, b_cov, C, N_con, DF):
 # @timing
 # @save_parameters
 def hase_supporting_interactions(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
+    with Timer() as t:
+        # These together form the X matrix
+        B13 = b_cov
+        number_of_variable_terms = b_variable.shape[0]
+        variant_effect_index = a_inverse.shape[1] - 1
+
+        A1_B_constant = np.tensordot(a_inverse[:, :, 0:(number_of_constant_terms)], B13, axes=([2], [0]))
+
+        print(A1_B_constant[3,...])
+
+        # In the einsum notation, the labels represent the following:
+        # i: The variant axis
+        # j: ...
+        # k: The axis with regression terms (interaction, genotype)
+        # l: The phenotype axis
+        A1_B_nonconstant = np.einsum('ijk,kil->ijl',
+                                     a_inverse[:, :, number_of_constant_terms:number_of_constant_terms + number_of_variable_terms],
+                                     b_variable)
+
+        # Combine the inverse of A multiplied with
+        # constant part of B and non-constant part of B
+        A1_B_full = A1_B_constant + A1_B_nonconstant
+
+        # In the einstein summation notation, the labels represent the following:
+        # l: The variant axis
+        # j: The the axis with the regression terms (interaction, genotype)
+        # i: The phenotype axis
+        BT_A1B_const = np.einsum('ij,lji->li', B13.T, A1_B_full[:, :(number_of_constant_terms), :])
+
+        # In the einstein summation notation, the labels represent the following
+        # i: The variant axis
+        # j: Terms
+        # k: Phenotype
+        BT_A1B_nonconst = np.einsum(
+            'ijk,ijk->ik', b_variable.transpose((1, 0, 2)),
+            A1_B_full[:, (number_of_constant_terms):number_of_constant_terms + number_of_variable_terms, :])
+
+        # Combine the constant and nonconstant parts of the BT, beta matrix
+        BT_A1B_full = BT_A1B_const + BT_A1B_nonconst
+
+        print(BT_A1B_full[3,...])
+
+        # Get the difference between C (dot product of phenotypes) and the matrix of estimates
+        C_BTA1B = BT_A1B_full - C.reshape(1, -1)
+        C_BTA1B = np.abs(C_BTA1B)
+
+        # Multiply the far right / lower part of every A_inv matrix
+        # (this is the part with the sum of the squares of genotype dosages),
+        # with the differences between C and the BT_A1B_full matrix
+        a44_C_BTA1B = np.einsum(
+            'il,i...->i...l', C_BTA1B,
+            a_inverse[:, variant_effect_index, (variant_effect_index):variant_effect_index+1])
+
+        # Square this result
+        a44_C_BTA1B = np.sqrt((a44_C_BTA1B))
+
+        # Get the t-statistics
+        t_stat = np.sqrt(DF) * np.divide(
+            A1_B_full[:, (variant_effect_index):variant_effect_index+1, :], a44_C_BTA1B)
+        # The t-statistics are stored in a 3d array with the first dimension
+        # representing the variants (main determinants to test), the second
+        # dimension being synonymous (or at least as it appears to me) to the
+        # third dimension representing phenotypes.
+        # Second dimension thus only contains one element (phenotype array)
+
+        # Get the standard error.
+        SE = a44_C_BTA1B / np.sqrt(DF)
+        # Standard errors are stored in the same ways as the t-statistics:
+        # SE[variant][0][phenotype]
+
+    print("time to compute GWAS for {} phenotypes and {} SNPs .... {} sec".format(b_variable.shape[2],
+                                                                                  a_inverse.shape[0],
+                                                                                  t.secs))
+    return t_stat, SE
+
+
+# @timing
+# @save_parameters
+def hase_allow_missingness_supporting_interactions(b_variable, a_inverse, b_cov, C, number_of_constant_terms, DF):
+
+    # What do we have:
+    # - variable part of the B-matrix (already expanded)
+    # - summed A inverse (already expanded)
+    # - summed C (already expanded)
+    # - summed static part of B
+
     with Timer() as t:
         # These together form the X matrix
         B13 = b_cov

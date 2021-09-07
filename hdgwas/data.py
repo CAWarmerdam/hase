@@ -332,12 +332,26 @@ class ParData(Data):
     def check(self):  # TODO (middle) place to implement the check of analysis protocol and log summary from PD
         print ('Number of subjects {}'.format(int(self.a_cov[0, 0])))
 
+    @staticmethod
+    def harmonize_variant_dependent_a(variant_dependent_a):
+        """
+        Method that adds a second dimension to the variant dependant A.
+        :param variant_dependent_a: a 1 or 2d array that represents the variable dependent A.
+        :return: variant dependent A with exactly 2 dimensions.
+        """
+        if variant_dependent_a.ndim == 2:
+            variant_dependent_a = variant_dependent_a[:, :, np.newaxis]
+        return variant_dependent_a
+
     def get(self, gen_order=None, phen_order=None, cov_order=None):
 
         if gen_order is None or phen_order is None or cov_order is None:
             raise ValueError('PD order is not define!')
         if isinstance(self.a_inv, type(None)):
-            return self.a_test[np.ix_(gen_order, np.append(cov_order, self.a_test.shape[1] - 1))], self.b_cov[
+            a_test_intermediate = self.a_test[np.ix_(gen_order, np.append(cov_order, self.a_test.shape[1] - 1))]
+            a_test_intermediate[gen_order == -1, ...] = 0
+            a_test_intermediate = self.harmonize_variant_dependent_a(a_test_intermediate)
+            return a_test_intermediate, self.b_cov[
                 np.ix_(cov_order, phen_order)], \
                    self.C[phen_order], self.a_cov[np.ix_(cov_order, cov_order)]
         else:
@@ -443,12 +457,17 @@ class MetaPhenotype(object):
 
 class MetaParData(object):
 
-    def __init__(self, pd, study_names, protocol=None):
+    def __init__(self, pd, study_names, protocol=None, allow_missingness=False):
         # @timing
-        def _check(map, keys):
+        def _check(map, keys, allow_missingness = False):
             values = np.array(map.dic.values())
             result = {}
-            r = (values == -1).any(axis=1)
+
+            if allow_missingness:
+                r = (values == -1).all(axis=1)
+            else:
+                r = (values == -1).any(axis=1)
+
             if np.sum(r) == values.shape[0]:
                 raise ValueError('There is no common names between studies')
             for i, k in enumerate(keys):
@@ -471,11 +490,11 @@ class MetaParData(object):
                     self.phen_mapper.fill(k.folder._data.metadata['phenotype'], k.folder.name, reference=False)
                     self.cov_mapper.fill(self.covariates[k], k.folder.name, reference=False)
                 else:
-                    self.phen_mapper.push(k.folder._data.metadata['phenotype'], name=k.folder.name, new_id=False)
+                    self.phen_mapper.push(k.folder._data.metadata['phenotype'], name=k.folder.name, new_id=allow_missingness)
                     self.cov_mapper.push(self.covariates[k], name=k.folder.name, new_id=False)
                 keys.append(k.folder.name)
 
-            self.phen_order = _check(self.phen_mapper, keys)
+            self.phen_order = _check(self.phen_mapper, keys, allow_missingness)
             self.cov_order = _check(self.cov_mapper, keys)
 
         if protocol is not None:
@@ -563,59 +582,124 @@ class MetaParData(object):
         else:
             return a_test, b_cov, C, a_cov
 
-    def get_expanded(self, SNPs_index=None, B4=False, regression_model=None, random_effect_intercept=False):
+    def get_expanded(self, variant_indices=None, B4=False, regression_model=None, random_effect_intercept=False):
 
+        # First check if the partial derivatives are provided
         if self.pd is None:
             raise ValueError('Data not defined!')
+
+        # Get all study names as keys
         k = self.pd.keys()
-        if SNPs_index is not None:
-            if len(self.pd) != len(SNPs_index):
+
+        # Now loop through all partial derivatives to
+        # sum A_test, stack A_cov, stack B_cov, stack C
+
+        # Variant indices should be defined
+        if variant_indices is not None:
+            if len(self.pd) != len(variant_indices):
                 raise ValueError(
-                    'There are not equal number od PD and SNPs indexes {}!={}'.format(len(self.pd), len(SNPs_index)))
-            a_test, b_cov, C, a_cov = self.pd[k[0]].get(gen_order=SNPs_index[0], phen_order=self.phen_order[k[0]],
-                                                        cov_order=self.cov_order[k[0]])
-            if random_effect_intercept and len(self.pd) > 1:  # TODO (high)
-                a_test_effect = a_test[:, 0:1]
-                b_cov_effect = b_cov[0:1, :]
-                a_cov_effect = a_cov[0:1, :]
+                    'There are not equal number od PD and SNPs indexes {}!={}'.format(len(self.pd), len(variant_indices)))
         else:
             raise ValueError('Indexes are not defined!')
 
+        # For the first study, grab the partial derivatives as a starting point.
+        a_test, b_cov, C, a_cov = self.pd[k[0]].get(gen_order=variant_indices[0], phen_order=self.phen_order[k[0]],
+                                                    cov_order=self.cov_order[k[0]])
+
+        # Intercept values are grabbed
+        # This corresponds to:
+        # - The top row values from the A matrix (see paper)
+        # - The first values from the b_cov matrix
+        if random_effect_intercept and len(self.pd) > 1:  # TODO (high)
+            # Top row of A matrix (variable part)
+            a_test_effect = a_test[:, 0:1]
+            # First values from the b_cov matrix
+            b_cov_effect = b_cov[0:1, :]
+            # Top rows of A matrix (constant part)
+            a_cov_effect = a_cov[0:1, :]
+
         if B4:
-            b4 = self.pd[k[0]].folder._data.b4[SNPs_index[0], :]
+            raise NotImplementedError
+            b4 = self.pd[k[0]].folder._data.b4[variant_indices[0], :]
             b4 = b4[:, self.phen_order[k[0]]]
 
-        # self.check_maf(SNPs_index)
+        # In the statements below, instead of summing each pd part along the axis of the cohorts,
+        # we stack them along this axis.
+
+        # First, we define stacks containing only the first study for now.
+        # k[0] represents name of the first study.
+
+        # Define stack of a_cov arrays
+        a_cov_stack = {k[0]: a_cov}
+
+        # Define stack of b_cov arrays
+        b_cov_stack = {k[0]: b_cov}
+
+        # Define stack of C arrays
+        c_stack = {k[0]: C}
 
         for i in range(1, len(self.pd)):
-            a, b, c, a_c = self.pd[k[i]].get(gen_order=SNPs_index[i], phen_order=self.phen_order[k[i]],
+            a, b, c, a_c = self.pd[k[i]].get(gen_order=variant_indices[i], phen_order=self.phen_order[k[i]],
                                              cov_order=self.cov_order[k[i]])
+
+            # Not understood what happens here...
             self.check_pd([a_test, b_cov, C, a_cov], [a, b, c, a_c])
+
+            # Here, we start adding the partial derivatives for the other studies to the stack.
+
+            # A_test is already separated over variants.
+            # sum a_tests for every study
             a_test = a_test + a
-            b_cov = b_cov + b
-            C = C + c
-            a_cov = a_cov + a_c
+            # Stack the b_covariate values
+            b_cov_stack[k[i]] = b
+            # Stack the C matrices
+            c_stack[k[i]] = c
+            # Stack the a constant part
+            a_cov_stack[k[i]] = a_c
+
+            # Stack the random effects to the random effects of the previous
+            # Cohorts.
             if random_effect_intercept and i < (len(self.pd) - 1):
+                # Top row of A matrix (variable part)
                 a_test_effect = np.hstack((a_test_effect, a[:, 0:1]))
+                # First values from the b_cov matrix
                 b_cov_effect = np.vstack((b_cov_effect, b[0:1, :]))
+                # Top rows of A matrix (constant part)
                 a_cov_effect = np.vstack((a_cov_effect, a_c[0:1, :]))
             if B4:
-                b4_tmp = self.pd[k[i]].folder._data.b4[SNPs_index[i], :]
+                raise NotImplemented
+                b4_tmp = self.pd[k[i]].folder._data.b4[variant_indices[i], :]
                 b4 = b4 + b4_tmp[:, self.phen_order[k[i]]]
 
+        # Expand A over all variants, summing A when cohorts have overlapping variants
+        a_cov_expanded = np.einsum('c...,cv->v...', np.array(a_cov_stack), variant_indices) # TODO: check if the variant indices already work as variant indices
+
+        # If the random effect intercepts are required, and when we have
+        # more than one cohort, we want to add the random effect intercepts
+        # to the partial derivatives.
         if random_effect_intercept and len(self.pd) > 1:
-            a_cov_I = np.zeros((len(self.pd) - 1, len(self.pd) - 1))
-            np.fill_diagonal(a_cov_I, a_cov_effect[:, 0])
-            a_effect = np.hstack((a_cov_I, a_cov_effect))
+            # Also expand the random effect intercept for A, and convert to variant dimension to a list
+            a_cov_effect_expanded = np.einsum('c...,cv->vc...', a_cov_effect, variant_indices)
+            # Here, initially a square matrix of zero's is made for which the size is the number of pds.
+            a_cov_I = np.zeros((variant_indices[0].shape[0], len(self.pd), len(self.pd)))
+            # Thereafter, the diagonal is filled with the first value of the top rows of every constant A.
+            # (Should be the sample count for each cohort)
+            diagonal_mask = np.eye(A_cov_I.shape[1], dtype=bool)
+            A_cov_I[...,diagonal_mask] = a_cov_effect_expanded[...,0]
+            # Here, we stack the covariance matrix to the stacked constant parts of A
+            a_effect = np.concatenate((a_cov_I, a_cov_effect), 2)
+            # Stack along the second axis
             a_test = np.hstack((a_test_effect, a_test))
-            b_cov = np.vstack((b_cov_effect, b_cov))
-            a_cov = np.vstack((a_cov_effect, a_cov))
-            a_cov = np.hstack((a_effect.T, a_cov))
+            # Loop over the b_cov_stacks, appending the stuff
+            b_cov_stack = np.vstack((b_cov_effect, b_cov_stack))
+            a_cov_stack = np.vstack((a_cov_effect, a_cov_stack))
+            a_cov_stack = np.hstack((a_effect.T, a_cov_stack))
 
         if B4:
-            return a_test, b_cov, C, a_cov, b4
+            raise NotImplementedError
+            return a_test, b_cov_stack, c_stack, a_cov_stack, b4
         else:
-            return a_test, b_cov, C, a_cov
+            return a_test, b_cov_stack, c_stack, a_cov_stack
 
     def maf_pard(self, SNPs_index=None):
 
@@ -631,6 +715,9 @@ class MetaParData(object):
 
     def get_n_id(self):
         return np.sum([len(self.pd[i].folder._data.metadata['id']) for i in self.pd])
+
+    def get_n_per_study(self):
+        return [len(self.pd[i].folder._data.metadata['id']) for i in self.pd]
 
     def get_phenotype_names(self):
         n = {}

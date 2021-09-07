@@ -14,7 +14,7 @@ from hdgwas.converter import GenotypePLINK, GenotypeMINIMAC, GenotypeVCF
 from hdgwas.data import Reader, MetaParData, MetaPhenotype
 from hdgwas.fake import Encoder
 from hdgwas.hdregression import HASE, A_covariates, A_tests, B_covariates, C_matrix, A_inverse, B4, \
-    get_a_inverse_extended, hase_supporting_interactions
+    get_a_inverse_extended, hase_supporting_interactions, expand_sample_size_matrix, a_inverse_extended_allow_missingness
 import argparse
 import gc
 from hdgwas.pard import partial_derivatives
@@ -119,6 +119,8 @@ def main(argv=None):
     parser.add_argument('-permute_ph', action='store_true', default=False, help='Flag for phenotype permutation')
     parser.add_argument('-vcf', action='store_true', default=False, help='Flag for VCF data to convert')
     parser.add_argument('-np', action='store_true', default=True, help='Check BLAS/LAPACK/MKL')
+    parser.add_argument('-allow_missingness', action='store_true', default=False,
+                        help='Flag for using missingness, instead of using default implementation for meta-analysis.')
 
     # TODO (low) save genotype after MAF
     ###
@@ -455,13 +457,14 @@ def main(argv=None):
         # Start looping over all genotype chunks
         while True:
             if mapper.cluster == 'n':
-                SNPs_index, keys = mapper.get()
+                SNPs_index, keys = mapper.get(
+                    allow_missingness = args.allow_missingness)
             else:
                 ch = mapper.chunk_pop()
                 if ch is None:
                     SNPs_index = None
                     break
-                SNPs_index, keys = mapper.get(chunk_number=ch)
+                SNPs_index, keys = mapper.get(chunk_number=ch, allow_missingness=args.allow_missingness)
 
             if isinstance(SNPs_index, type(None)):
                 break
@@ -491,19 +494,39 @@ def main(argv=None):
 
             with Timer() as t_pd:
                 if is_no_b4_present_in_partial_derivatives:
-                    a_test, b_cov, C, a_cov = meta_pard.get(variant_indices=SNPs_index, regression_model=regression_model,
-                                                            random_effect_intercept=args.effect_intercept)
-                    a_complete, b_cov_expanded, c_complete = meta_pard.get_expanded(
-                        variant_indices=SNPs_index, regression_model=regression_model,
-                        random_effect_intercept=args.effect_intercept)
-                else:
-                    a_test, b_cov, C, a_cov, b4 = meta_pard.get(variant_indices=SNPs_index, B4=True,
-                                                                regression_model=regression_model,
+                    # If we allow for missingness in the variants. We should consider each of the variants separately
+                    # In some way.
+                    # In the get_expanded method we
+                    if args.allow_missingness:
+                        a_test, a_cov_stack, b_cov_stack, c_full_stack = meta_pard.get_expanded(
+                            variant_indices=SNPs_index, regression_model=regression_model,
+                            random_effect_intercept=args.effect_intercept)
+                    else:
+                        a_test, b_cov, C, a_cov = meta_pard.get(variant_indices=SNPs_index, regression_model=regression_model,
                                                                 random_effect_intercept=args.effect_intercept)
+                else:
+                    if args.allow_missingness:
+                        a_test, a_cov_stack, b_cov_stack, c_full_stack, b4 = meta_pard.get_expanded(
+                            variant_indices=SNPs_index, regression_model=regression_model,
+                            random_effect_intercept=args.effect_intercept)
+                    else:
+                        a_test, b_cov, C, a_cov, b4 = meta_pard.get(variant_indices=SNPs_index, B4=True,
+                                                                    regression_model=regression_model,
+                                                                    random_effect_intercept=args.effect_intercept)
 
             print "Time to get PD {}s".format(t_pd.secs)
 
             MAF = meta_pard.maf_pard(SNPs_index=SNPs_index)
+
+            sample_size = meta_pard.get_n_id()
+
+            # Check if missingness is allowed.
+            if args.allow_missingness:
+                # If missingness is defined, define the sample size by a matrix of dimensions nVariants * nPhenotypes,
+                # with every combination portraying the number of samples available to test that combination.
+                sample_size = expand_sample_size_matrix(
+                    sample_size = meta_pard.get_n_per_study(),
+                    variant_indices = SNPs_index)
 
             if args.maf != 0:
                 filter = (MAF > args.maf) & (MAF < 1 - args.maf) & (MAF != 0.5)
@@ -523,12 +546,16 @@ def main(argv=None):
 
             # Use new A_inverse that supports variable number of non-constant A parts
             # a_inv = A_inverse(a_cov, a_test)
-            a_inv = get_a_inverse_extended(a_cov, a_test)
+            if args.allow_missingness:
+                a_inv = a_inverse_extended_allow_missingness(a_test, a_cov_stack, SNPs_index)
+            else:
+                a_inv = get_a_inverse_extended(a_cov, a_test)
 
             number_of_variable_terms = a_test.shape[2]
             number_of_constant_terms = a_inv.shape[1] - number_of_variable_terms
             print 'There are {} subjects in study.'.format(meta_pard.get_n_id())
-            DF = (meta_pard.get_n_id() - a_inv.shape[1])
+
+            DF = (sample_size - a_inv.shape[1])
 
             if is_no_b4_present_in_partial_derivatives:
 

@@ -53,7 +53,8 @@ class HaseInteractionTestCase(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory
         #self.test_dir = tempfile.mkdtemp()
-        self.test_dir = "/var/folders/ch/xw_1fk6j2v95btsrlchx63h40000gn/T/tmpa0Caye"
+        self.test_dir = "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/out"
+        #self.test_dir = "/var/folders/ch/xw_1fk6j2v95btsrlchx63h40000gn/T/tmpvDZtAJ"
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
 
@@ -112,7 +113,8 @@ class HaseInteractionTestCase(unittest.TestCase):
         # Copy the probes to genotype_meta. This calls os.makedirs() always,
         # and throws an exception if it already exists.
         # First we remove the genotype_meta if it does already exist
-        shutil.rmtree(meta)
+        if os.path.exists(meta):
+            shutil.rmtree(meta)
         shutil.copytree(os.path.join(hdf5_genotype_directory, "probes"), os.path.join(genotype_meta, "probes"))
 
         # Make the required directories
@@ -133,7 +135,7 @@ class HaseInteractionTestCase(unittest.TestCase):
         hase.main(["-g", genotype_meta, "-study_name", "dosage",
                    "-ph", phenotype_meta, "-derivatives", partial_derivatives_meta,
                    "-mapper", mapper_directory, "-o", results_directory,
-                   "-mode", "meta-stage"])
+                   "-mode", "meta-stage", "-allow_missingness"])
 
         # (Generate the output file)
 
@@ -147,7 +149,7 @@ class HaseInteractionActualTestCase(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory
         #self.test_dir = tempfile.mkdtemp()
-        self.test_dir = "/var/folders/ch/xw_1fk6j2v95btsrlchx63h40000gn/T/tmpa0Caye"
+        self.test_dir = "/var/folders/ch/xw_1fk6j2v95btsrlchx63h40000gn/T/tmpvDZtAJ"
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
 
@@ -210,7 +212,8 @@ class HaseInteractionActualTestCase(unittest.TestCase):
         # Copy the probes to genotype_meta. This calls os.makedirs() always,
         # and throws an exception if it already exists.
         # First we remove the genotype_meta if it does already exist
-        shutil.rmtree(meta)
+        if os.path.exists(meta):
+            shutil.rmtree(meta)
         shutil.copytree(os.path.join(hdf5_genotype_directory, "probes"), os.path.join(genotype_meta, "probes"))
 
         # Make the required directories

@@ -159,7 +159,7 @@ def expand_B_covariates(b_cov, variant_indices):
     pass
 
 
-def a_inverse_extended_allow_missingness(variant_dependent_a, constant_a, variant_indices):
+def a_inverse_extended_allow_missingness(variant_dependent_a, constant_a, variant_indices, random_effect_intercept):
     variant_indices_arr = np.array(variant_indices).T
 
     # Obtain the dimensions of an expanded constant_a
@@ -173,13 +173,11 @@ def a_inverse_extended_allow_missingness(variant_dependent_a, constant_a, varian
     a_covariates_expanded[variant_indices_arr == -1, :, :] = 0
 
     # For every variant, sum the A_cov's for every study
-    a_covariates_expanded = np.sum(a_covariates_expanded, axis = 1)
+    #a_covariates_expanded = np.sum(a_covariates_expanded, axis = 1)
 
     a_inverse_list = []
 
     n, m = constant_a[0].shape
-    if variant_dependent_a.ndim == 2:
-        variant_dependent_a = variant_dependent_a[:, :, np.newaxis]
     k = n + variant_dependent_a.shape[2]
 
     for i in range(variant_dependent_a.shape[0]):

@@ -91,7 +91,7 @@ class HaseAnalyser(Analyser):
         self.t_stat = None
         self.p_value = None
         self.betas = None
-        self.SE = None
+        self.standard_error = None
         self.DF = None
         self.n_studies = None
         self.probes_path = {}
@@ -101,7 +101,7 @@ class HaseAnalyser(Analyser):
         self.result_path = None
         self.result_index = 1
         self.out = None
-        self.MAF = None
+        self.maf = None
         self.rsid = None
         self.reference = None
         self.cluster = False
@@ -110,6 +110,20 @@ class HaseAnalyser(Analyser):
         self.result_folder = None
         self.result_dump_size = 3
         self.file_number = None
+
+    def get_betas(self):
+        """
+        Returns a 3d array of beta values
+        :return: 3d array of beta values.
+        -   The 1st dimension of this array comprises each of the included
+            phenotypes for the respective cohort or study.
+        -   The 2nd dimension of this array does not seem to have a function.
+            (could this perhaps have been meant for interaction effects)
+        -   The 3rd dimension of this array represents all of the phenotypes
+            that are tested for.
+        """
+        if self.t_stat.shape == self.standard_error.shape:
+            return self.t_stat * self.standard_error
 
     def summary(self):
 
@@ -194,9 +208,9 @@ class HaseAnalyser(Analyser):
         if (len(mask[0]) != 0):
             print ('Saving results to {}'.format(save_path))
             t_save = self.t_stat[mask[0], mask[1], mask[2]]
-            se = self.SE[mask[0], mask[1], mask[2]]
+            se = self.standard_error[mask[0], mask[1], mask[2]]
             result = {'phenotype': phen_names[mask[2]], 't-stat': t_save, 'index': self.rsid[mask[0]], 'SE': se,
-                      'MAF': self.MAF[mask[0]]}
+                      'MAF': self.maf[mask[0]]}
 
             if not self.cluster:
                 np.save(os.path.join(save_path, str(self.result_index) + 'result.npy'), result)
@@ -556,6 +570,8 @@ class Mapper(object):
             raise ValueError('Genotype names are not defined!')
 
         self.values = np.zeros((self.n_keys, len(self.genotype_names)))
+        # Mapper files should always maintain the same order as the order of study names, so they stay aligned
+        # with all other data structures.
         for j, i in enumerate(self.genotype_names):
             self.values[:, j] = np.load(os.path.join(folder, 'values_' + self.reference_name + '_' + i + '.npy'))
 
@@ -885,6 +901,41 @@ def _get_id(object):
     return id_p.astype(np.str)
 
 
+def get_identifier_array(object):
+    """
+    Method that returns a 2d array of samples, with the first column
+    representing the sample id, and the second column representing the
+    second column.
+    :param object:
+    :return:
+    """
+    if isinstance(object, type(None)):
+        # If the given object is none, return an empty array
+        id_p = np.array([], dtype=np.str)
+    else:
+        # If collect the ids from the given object
+        if isinstance(object, tuple):
+            id_p = np.empty((0,2), dtype=np.str)
+            # For each study / cohort, the ids are appended.
+            # AFAIK, no care is given to possible duplicates.
+            # Here, we take care of possible duplicates by prepending
+            # ids for a specific study with the study name
+            for study_index, study_data in enumerate(object):
+                if isinstance(study_data, dict):
+                    sample_ids_in_current_study = study_data['id']
+                else:
+                    sample_ids_in_current_study = study_data.get_id()
+                new_sample_ids = np.vstack((
+                    sample_ids_in_current_study,
+                    np.array([study_index] * len(sample_ids_in_current_study))
+                )).T
+
+                id_p = np.append(id_p, new_sample_ids, 0)
+        else:
+            id_p = object.get_id()
+    return id_p.astype(np.str)
+
+
 def get_intersecting_individual_indices(datasets):
     # Make sure that the length of dictionary datasets is larger than 1
     if len(datasets) < 2:
@@ -892,26 +943,43 @@ def get_intersecting_individual_indices(datasets):
     # Indices
     indices = dict()
     # Get the identifiers from the datasets
-    identifiers = {key: _get_id(dataset) for key, dataset in datasets.items()}
+    identifiers = {key: get_identifier_array(dataset) for key, dataset in datasets.items()}
     # Get the keys from the identifiers
     keys = list(identifiers.keys())
     # Start the intersections
-    intersection = identifiers[keys[0]]
+    intersection = set([tuple(ids) for ids in identifiers[keys[0]]])
 
     # Loop through the datasets and get the preliminary intersection
     for key in keys[1:]:
-        intersection = np.intersect1d(intersection, identifiers[key])
+        new_set = set([tuple(ids) for ids in identifiers[key]])
+        intersection = set([x for x in set(tuple(x) for x in new_set) & set(tuple(x) for x in intersection)])
+
+    intersection = np.array(list(intersection))
 
     for key in keys:
         # Loop through the datasets and get the indices of the values in the
         # intersection within the original list of identifiers.
         identifier = identifiers[key][:, np.newaxis]
-        intersection_indices = (identifier == intersection)
+        intersection_indices = (identifier == intersection).all(-1)
         indices[key] = intersection_indices.argmax(axis=0)
 
     print ('There are {} common ids'.format(len(intersection)))
     # Could possibly save the results...
     return indices, intersection
+
+
+def select_identifiers(study_index, row_index, intersection):
+    # Go through all datasets, picking all samples from the intersection
+    # where the study index column is equal to the requested study index.
+    indices_of_selected_samples = dict()
+
+    # Get the identifiers from the datasets
+    for key, indices in row_index.items():
+        indices_of_selected_samples[key] = indices[np.where(
+            intersection[:,1] == str(study_index)
+        )]
+
+    return indices_of_selected_samples
 
 
 def study_indexes(args=None,
@@ -993,35 +1061,61 @@ def study_indexes(args=None,
 
 
 # @timing
-def merge_genotype(genotype, SNPs_index, mapper, flip_flag=True):
-    if SNPs_index is None:
+def merge_genotype(genotype, variant_indices, mapper, flip_flag=True):
+    if variant_indices is None:
         gen = genotype[0].get_next()
         if gen is not None:
             for i in range(1, len(genotype)):
                 gen = np.hstack((gen, genotype[i].get_next()))
         return gen
     else:
-        if len(genotype) != len(SNPs_index):
+        if len(genotype) != len(variant_indices):
             raise ValueError('There are not equal number of genotypes and SNPs indexes {}!={}'.format(len(genotype),
-                                                                                                      len(SNPs_index)))
-        gen = np.zeros((len(SNPs_index[0]), np.sum([i.folder._data.id.shape[0] for i in genotype])))
+                                                                                                      len(variant_indices)))
+        gen = np.zeros((len(variant_indices[0]), np.sum([i.folder._data.id.shape[0] for i in genotype])))
         a = 0
         b = 0
         for i in range(0, len(genotype)):
-            g = genotype[i].get(SNPs_index[i], impute=False)
+            g = genotype[i].get(variant_indices[i], impute=False)
             print(gen.shape)
             b += g.shape[1]
             if flip_flag:
                 if not mapper.encoded.get(genotype[i].folder.name, 0):
-                    flip = mapper.flip[genotype[i].folder.name][SNPs_index[i]]
+                    flip = mapper.flip[genotype[i].folder.name][variant_indices[i]]
                     flip_index = (flip == -1)
                     g = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, g)
 
-            g[np.where(SNPs_index[i] == -1), :] = 0
+            g[np.where(variant_indices[i] == -1), :] = 0
             gen[:, a:b] = g
             a = b
 
         return gen
+
+
+# @timing
+def get_genotype(genotype, study_index, variant_indices, mapper, flip_flag=True):
+    if variant_indices is None:
+        gen = genotype[study_index].get_next()
+        return gen
+    else:
+        if len(genotype) != len(variant_indices):
+            raise ValueError('There are not equal number of genotypes and SNPs indexes {}!={}'.format(len(genotype),
+                                                                                                      len(variant_indices)))
+
+        # Now get the genotype for this study and perform flipping if necessary
+        g = genotype[study_index].get(variant_indices[study_index], impute=False)
+        print(g.shape)
+        if flip_flag:
+            if not mapper.encoded.get(genotype[study_index].folder.name, 0):
+                flip = mapper.flip[genotype[study_index].folder.name][variant_indices[study_index]]
+                flip_index = (flip == -1)
+                g = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, g)
+
+        # Set all genotypes to 0 if the variant in question is not present
+        # in this dataset.
+        g[np.where(variant_indices[study_index] == -1), :] = 0
+
+        return g
 
 
 def check_converter(converted_folder, study_name):

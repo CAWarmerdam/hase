@@ -355,19 +355,25 @@ class ParData(Data):
                 np.ix_(cov_order, phen_order)], \
                    self.C[phen_order], self.a_cov[np.ix_(cov_order, cov_order)]
         else:
-            return self.a_inv[np.ix_(gen_order, np.append(cov_order, self.a_test.shape[1] - 1))], self.b_cov[
+            a_inverse = self.a_inv[np.ix_(gen_order, np.append(cov_order, self.a_test.shape[1] - 1))]
+            a_inverse[gen_order == -1, ...] = 0
+            return a_inverse, self.b_cov[
                 np.ix_(cov_order, phen_order)], \
                    self.C[phen_order], self.a_cov[np.ix_(cov_order, cov_order)]
 
 
 class MetaPhenotype(object):
 
-    def __init__(self, phen, protocol=None, include=None, exclude=None):
+    def __init__(self, phen, protocol=None, include=None, exclude=None,
+                 allow_missingness=False):
         # @timing
-        def _check(map, keys, index=None):
+        def _check(map, keys, index=None, allow_missingness=False):
             values = np.array(map.dic.values())
             result = {}
-            r = (values == -1).any(axis=1)
+            if allow_missingness:
+                r = (values == -1).all(axis=1)
+            else:
+                r = (values == -1).any(axis=1)
             if index is not None:
                 r[np.where(index == False)[0]] = True
             if np.sum(r) == values.shape[0]:
@@ -416,7 +422,8 @@ class MetaPhenotype(object):
                 phen_names = phen_names[~phen_names.isin(self.exclude.ID)] if self.exclude is not None else phen_names
                 self.keep_index = pd.Series(self.mapper.dic.keys()).isin(phen_names)
             print np.sum(self.keep_index)
-            self.order, self.phen_names = _check(self.mapper, self.keys, index=self.keep_index)
+            self.order, self.phen_names = _check(self.mapper, self.keys, index=self.keep_index,
+                                                 allow_missingness=allow_missingness)
             self.n_phenotypes = len(self.order[self.keys[0]])
             print ('Loaded {} common phenotypes for meta-analysis'.format(self.n_phenotypes))
             self.processed = 0
@@ -429,13 +436,59 @@ class MetaPhenotype(object):
     def get(self):
         if self.processed == self.n_phenotypes:
             return None, None
+
+        start = self.processed
+        if (self.processed + self.chunk_size) <= self.n_phenotypes:
+            finish = self.processed + self.chunk_size
+        else:
+            finish = self.n_phenotypes
+        self.processed = finish
+
+        # Make new phenotype matrix consisting of zeros (for now)
+        # Every sample will be represented across the rows
+        # Every phenotype in this chunk will represented across the columns
+        phenotype = np.zeros(
+            (np.sum([len(self.pool[i].folder._data.id) for i in self.pool]), len(range(start, finish))))
+
+        # Now loop over each of the studies. For each study the
+        for i, j in enumerate(self.keys):
+
+            if i == 0:
+                a, b = 0, self.pool[j].folder._data.id.shape[0]
+                phenotype[a:b, :] = self.pool[j].get_chunk(self.order[j][start:finish])
+                a = b
+                N = np.random.randint(0, phenotype.shape[1], 10)
+                print phenotype.mean(axis=0)[N]
+            else:
+                ph_tmp = self.pool[j].get_chunk(self.order[j][start:finish])
+                print self.pool[j].folder.path
+                print ph_tmp.mean(axis=0)[N]
+                b += ph_tmp.shape[0]
+                phenotype[a:b, :] = ph_tmp
+                a = b
+
+        return phenotype, self.phen_names[start:finish]
+
+    def get_phenotype_indices(self, phenotype_names):
+        chunked_order = dict()
+
+        for study_index in self.keys:
+            chunked_order[study_index] = self.order[study_index][np.where(self.phen_names == phenotype_names)]
+
+        return chunked_order
+
+    def get_study(self, study_index):
+        if self.processed == self.n_phenotypes:
+            return None, None
         else:
             start = self.processed
             finish = self.processed + self.chunk_size if (
                                                                      self.processed + self.chunk_size) <= self.n_phenotypes else self.n_phenotypes
             self.processed = finish
             phenotype = np.zeros(
-                (np.sum([len(self.pool[i].folder._data.id) for i in self.pool]), len(range(start, finish))))
+                (len(self.pool[study_index].folder._data.id),
+                 len(range(start, finish))))
+
         for i, j in enumerate(self.keys):
 
             if i == 0:
@@ -701,6 +754,41 @@ class MetaParData(object):
         else:
             return a_test, b_cov_stack, c_stack, a_cov_stack
 
+    def get_single_study(self, study_name, study_index, variant_indices=None, B4=False):
+
+        # First check if the partial derivatives are provided
+        if self.pd is None:
+            raise ValueError('Data not defined!')
+
+        # Now loop through all partial derivatives to
+        # sum A_test, stack A_cov, stack B_cov, stack C
+
+        # Variant indices should be defined
+        if variant_indices is not None:
+            if len(self.pd) != len(variant_indices):
+                raise ValueError(
+                    'There are not equal number od PD and SNPs indexes {}!={}'.format(len(self.pd), len(variant_indices)))
+        else:
+            raise ValueError('Indexes are not defined!')
+
+        # For the first study, grab the partial derivatives as a starting point.
+        a_test, b_cov, C, a_cov = self.pd[study_name].get(
+            gen_order=variant_indices[study_index],
+            phen_order=self.phen_order[study_name],
+            cov_order=self.cov_order[study_name])
+
+        if B4:
+            b4 = self.pd[study_name].folder._data.b4[variant_indices[study_index], :]
+            b4 = b4[:, self.phen_order[study_name]]
+
+        # In the statements below, instead of summing each pd part along the axis of the cohorts,
+        # we just return the partial derivatives for this cohort
+
+        if B4:
+            return a_test, b_cov, C, a_cov, b4
+        else:
+            return a_test, b_cov, C, a_cov
+
     def maf_pard(self, SNPs_index=None):
 
         samples = 0
@@ -709,9 +797,12 @@ class MetaParData(object):
         for j, i in enumerate(self.pd):
             n = len(self.pd[i].folder._data.metadata['id'])
             samples += n
-            maf = maf + n * np.array(self.pd[i].folder._data.metadata['MAF'])[SNPs_index[j]]
+            maf = maf + n * self.minor_allele_frequencies_study(SNPs_index, i, j)
         maf = maf / np.float(samples)
         return maf
+
+    def minor_allele_frequencies_study(self, study_name, study_index, SNPs_index):
+        return np.array(self.pd[study_name].folder._data.metadata['MAF'])[SNPs_index[study_index]]
 
     def get_n_id(self):
         return np.sum([len(self.pd[i].folder._data.metadata['id']) for i in self.pd])

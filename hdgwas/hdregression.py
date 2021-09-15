@@ -245,23 +245,17 @@ def B_covariates(covariates, phenotype, intercept=True):
 
 
 def get_a_inverse_extended(a_covariates, variant_dependent_a):
-    A_inv = []
     n,m = a_covariates.shape
     if variant_dependent_a.ndim == 2:
         return A_inverse(a_covariates, variant_dependent_a)
     k = n + variant_dependent_a.shape[2]
 
-    for i in range(variant_dependent_a.shape[0]):
-        inv = np.zeros(k*k).reshape(k,k)
-        inv[0:n, 0:n] = a_covariates
-        inv[:, n:k] = variant_dependent_a[i,:]
-        inv[n:k, :k-1] = np.maximum(inv[n:k, :k-1],
-                                    variant_dependent_a[i,:k-1].T)
-        try:
-            A_inv.append(np.linalg.inv(inv))
-        except:
-            A_inv.append(np.zeros(k * k).reshape(k, k))  # TODO (high) test; check influence on results; warning;
-    return np.array(A_inv)
+    a_complete = np.zeros((variant_dependent_a.shape[0], k, k))
+    a_complete[..., 0:n, 0:n] = a_covariates
+    a_complete[..., :, n:k] = variant_dependent_a
+    a_complete = np.triu(a_complete) + np.triu(a_complete, 1).transpose((0,2,1))
+
+    return(np.linalg.inv(a_complete))
 
 
 # @timing

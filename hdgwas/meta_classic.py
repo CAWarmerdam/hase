@@ -119,19 +119,7 @@ class ClassicMetaAnalyser:
         """
         Meta analysis for all associations.
 
-        For each association, we apply an inverse variance meta analyis.
-
-        From the analysis of individual cohorts we can extract a number of
-        summary statistics in a 3d numpy array:
-        -   The 1st dimension of this array comprises each of the included
-            phenotypes for the respective cohort or study.
-        -   The 2nd dimension of this array does not seem to have a function.
-            (could this perhaps have been meant for interaction effects)
-        -   The 3rd dimension of this array represents all of the phenotypes
-            that are tested for.
-
-        We need to combine each of these dimensions so that variants match
-        with each other and we can accurately do a meta-analysis.
+        For each association, we apply an inverse variance meta analysis.
 
         For combining the results between cohorts, we complete the matrices
         with all missing values for ease of use.
@@ -139,38 +127,43 @@ class ClassicMetaAnalyser:
         :param phenotype_names:
 
         """
-        # Now we need to do a meta-analysis
-        # Lets first find out how we need to code missing associations to not let these bias results.
-
-        # TODO: get a matrix that details what variant gene combination is missing
-        # Missing variants at the start are listed in variant_indices
-        # We should harmonise the variant indices with the variant_filter
-
-        # The same should be done for the phenotypes
-
-        # For every study, get summary statistics for all combinations that
-        # are present.
+        # We rely on the methods below to return a 3d matrix wherein the
+        # 0th dimension represents the studies / cohorts, the
+        # 1st dimension represents the variants, and the
+        # 2nd dimension represents the phenotypes.
         effect_sizes = self.get_effect_sizes()
         standard_error = self.get_standard_error()
+        # Missing values are expected to be NaN
+
+        # The inverse variance weighted meta-analysis requires calculating
+        # the variance of the effect estimate. We do this by calculating the
+        # 2nd power of the standard error.
         variance = standard_error ** 2
 
+        # Weight the effect sizes by dividing the effect size by
+        # the variance of the effect estimate.
+        # This is the same thing as multiplying the effect size by
+        # (1 / variance).
         effect_size_divided_by_variance = effect_sizes / variance
         effect_size_divided_by_variance_total = np.nansum(
             effect_size_divided_by_variance, axis=0)
 
+        # Calculate the total weight as the inverse of the variance of the effect
+        # estimate.
         one_divided_by_variance = 1 / variance
-        one_divided_by_variance_total = np.sum(one_divided_by_variance, axis=0)
+        one_divided_by_variance_total = np.nansum(one_divided_by_variance, axis=0)
 
+        # The total weighted effect size should be divided still by the
+        # total weight of each of the studies.
         meta_analysed_effect_sizes = effect_size_divided_by_variance_total / one_divided_by_variance_total
         meta_analysed_standard_error = np.sqrt(1 / one_divided_by_variance_total)
+
+        # TODO: Calculate i-squared values from each of the cohort's Z-scores
+
         meta_analysis_sample_sizes = self.get_sample_sizes()
 
         self.set_results(meta_analysed_effect_sizes, meta_analysed_standard_error, meta_analysis_sample_sizes,
                          phenotype_names, variant_names)
-
-        # For every cohort, add the effect size and se
-
-        # Return estimate, return se, return rsid, return phenotype
 
     def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error, meta_analysis_sample_sizes,
                     phenotype_names, variant_names):

@@ -135,7 +135,7 @@ class HaseInteractionTestCase(unittest.TestCase):
         hase.main(["-g", genotype_meta, "-study_name", "dosage",
                    "-ph", phenotype_meta, "-derivatives", partial_derivatives_meta,
                    "-mapper", mapper_directory, "-o", results_directory,
-                   "-mode", "meta-stage", "-allow_missingness"])
+                   "-mode", "meta-classic", "-allow_missingness"])
 
         # (Generate the output file)
 

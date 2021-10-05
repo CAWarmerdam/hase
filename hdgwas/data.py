@@ -127,6 +127,7 @@ class PhenPool(object):
                 r = self.folder._data._data
                 n = indices[(ind == i), 1].flatten()
                 r = r[:, n]
+                r[:, np.where(n == -1)[0]] = 0
             l = r.shape[0]
             if result is None:
                 result = np.empty((l, indices.shape[0]))
@@ -186,10 +187,27 @@ class Pool(object):
         keys, ind = np.unique(indices[:, 0], return_inverse=True)
         result = None
         for i, k in enumerate(keys):
+            # Make the r matrix. This is a matrix of genotypes.
+            # samples are represented across columns,
+            # variants are represented across rows.
             r = None
             if k in self.loaded:
                 n = indices[(ind == i), 1].flatten()
                 r = self.loaded[k][n, :]
+            elif k == -1:
+                # If k is -1, the variant is not present in the given study
+                # We therefore need to return an empty matrix with as many
+                # columns as there are samples, and as many rows as there are
+                # variants missing.
+
+                # We can get the number of samples from loading the first hdf5
+                # path.
+                f = h5py.File(self.paths[0], 'r')
+
+                # Lets fill in the empty array with nan values. That should be
+                # very clear.
+                r = np.full((np.sum(ind == i), f['genotype'].shape[1]), np.nan)
+                f.close()
             else:
                 f = h5py.File(self.paths[k], 'r')
                 n = indices[(ind == i), 1].flatten()
@@ -413,7 +431,7 @@ class MetaPhenotype(object):
                     for j in k.folder.files:
                         if j != 'info_dic.npy':
                             phen_names = phen_names + list(k.folder.data_info[j])
-                    self.mapper.push(phen_names, name=i, new_id=False)
+                    self.mapper.push(phen_names, name=i, new_id=True)
 
                 self.keys.append(i)
             if self.exclude is not None or self.include is not None:
@@ -471,6 +489,8 @@ class MetaPhenotype(object):
 
     def get_phenotype_indices(self, phenotype_names):
         chunked_order = dict()
+
+        # We want to adjust the
 
         for study_index in self.keys:
             chunked_order[study_index] = self.order[study_index][np.where(self.phen_names == phenotype_names)]

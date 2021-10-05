@@ -118,7 +118,7 @@ class HaseAnalyser(Analyser):
         -   The 1st dimension of this array comprises each of the included
             phenotypes for the respective cohort or study.
         -   The 2nd dimension of this array does not seem to have a function.
-            (could this perhaps have been meant for interaction effects)
+            (could this perhaps have been meant for interaction effects?)
         -   The 3rd dimension of this array represents all of the phenotypes
             that are tested for.
         """
@@ -754,17 +754,20 @@ class Mapper(object):
             # Get the indices for those values that are present in ANY studies
             # Values that are greater than -1 are present
             all_indices_for_values_with_all_studies_available = np.where(
-                (self.values[start:, :] > -1).any(axis=1))
+                (self.values[:, :] > -1).any(axis=1))
         else:
             # Get the indices for those values that are present in ALL studies
             # Values that are greater than -1 are present
             all_indices_for_values_with_all_studies_available = np.where(
-                (self.values[start:, :] > -1).all(axis=1))
+                (self.values[:, :] > -1).all(axis=1))
 
         # Get the intersection of values for which it was specified that they should be included,
         # and values that are actually available
         all_indices_for_values_with_all_studies_available = \
             np.intersect1d(all_indices_for_values_with_all_studies_available, self.include_ind)
+
+        all_indices_for_values_with_all_studies_available = all_indices_for_values_with_all_studies_available[
+            all_indices_for_values_with_all_studies_available >= start]
 
         # Loop over chunks, popping them, while the current chunk does not contain more than self.chunk_size values.
 

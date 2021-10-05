@@ -109,6 +109,8 @@ class TestInteractionSupportingHase(unittest.TestCase):
         self.assertTrue(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"t values"], t_stat[0, 0, 0]))
         print("Standard error and t-statistics equal between model and regular regression analysis")
 
+        # TODO: check if this does test the hase_supporting_interactions function?
+
     def test_without_interaction_with_variant_subsetting(self):
 
         a_cov_1, variant_dependent_a_1, b_cov_1, C_1, b4_1, matrix_with_determinants_x_1, phenotype_matrix_1 = \

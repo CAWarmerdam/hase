@@ -352,35 +352,15 @@ def main(argv=None):
 
     elif args.mode == 'meta-stage':
 
-        raise NotImplementedError()
-
         # ARG_CHECKER.check(args,mode='meta-stage')
 
         ##### Init data readers #####
         if args.derivatives is None:
             raise ValueError('For meta-stage analysis partial derivatives data are required!')
-        mapper = Mapper()
-        mapper.chunk_size = MAPPER_CHUNK_SIZE
-        mapper.genotype_names = args.study_name
-        mapper.reference_name = args.ref_name  # Reference dataset
-        if args.snp_id_inc is not None:  # If this is not none the argument contains a table of snps to include
-            mapper.include = pd.DataFrame.from_csv(args.snp_id_inc, index_col=None)
-            print 'Include:'
-            print mapper.include.head()
-            if 'ID' not in mapper.include.columns and (
-                    'CHR' not in mapper.include.columns or 'bp' not in mapper.include.columns):
-                raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_inc))
-        if args.snp_id_exc is not None:  # If this is not None the argument contains a table of snps to exclude
-            mapper.exclude = pd.DataFrame.from_csv(args.snp_id_exc, index_col=None)
-            print 'Exclude:'
-            print mapper.exclude.head()
-            if 'ID' not in mapper.exclude.columns and (
-                    'CHR' not in mapper.exclude.columns or 'bp' not in mapper.exclude.columns):
-                raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_exc))
-        mapper.load(args.mapper)  # Load the mapper files
-        mapper.load_flip(args.mapper, encode=args.encoded)  # often args.encoded is is null
-        mapper.cluster = args.cluster  # Is n by default
-        mapper.node = args.node
+        mapper = load_mapper(
+            mapper_chunk_size=MAPPER_CHUNK_SIZE, study_name=args.study_name, ref_name=args.ref_name,
+            mapper_folder=args.mapper, encoded=args.encoded, cluster=args.cluster, node=args.node,
+            snp_id_inc=args.snp_id_inc, snp_id_exc=args.snp_id_exc)
 
         Analyser = HaseAnalyser()
 
@@ -656,38 +636,10 @@ def main(argv=None):
         if args.derivatives is None:
             raise ValueError('For meta-classic analysis partial derivatives data are required!')
 
-        # Create Mapper object. This mapper object makes us able to synchronise across al variants
-        # in each of the separate datasets
-        mapper = Mapper()
-        # We set the chunk size in this mapper. Each chunk is analyzed separately.
-        mapper.chunk_size = MAPPER_CHUNK_SIZE
-        # Assign study and reference names
-        mapper.genotype_names = args.study_name
-        mapper.reference_name = args.ref_name  # Reference dataset
-
-        # Check if we are to exlude, or explicitly include some set of variants
-        if args.snp_id_inc is not None:  # If this is not none the argument contains a table of snps to include
-            mapper.include = pd.DataFrame.from_csv(args.snp_id_inc, index_col=None)
-            print 'Include:'
-            print mapper.include.head()
-            if 'ID' not in mapper.include.columns and (
-                    'CHR' not in mapper.include.columns or 'bp' not in mapper.include.columns):
-                raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_inc))
-        if args.snp_id_exc is not None:  # If this is not None the argument contains a table of snps to exclude
-            mapper.exclude = pd.DataFrame.from_csv(args.snp_id_exc, index_col=None)
-            print 'Exclude:'
-            print mapper.exclude.head()
-            if 'ID' not in mapper.exclude.columns and (
-                    'CHR' not in mapper.exclude.columns or 'bp' not in mapper.exclude.columns):
-                raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_exc))
-
-        # Load the mapper files for each of the datasets
-        mapper.load(args.mapper)  # Load the mapper files
-        # Load the flip files for each of the datasets
-        mapper.load_flip(args.mapper, encode=args.encoded)  # often args.encoded is is null
-        # For cluster stuff:
-        mapper.cluster = args.cluster  # Is n by default
-        mapper.node = args.node
+        mapper = load_mapper(
+            mapper_chunk_size=MAPPER_CHUNK_SIZE, study_name=args.study_name, ref_name=args.ref_name,
+            mapper_folder=args.mapper, encoded=args.encoded, cluster=args.cluster, node=args.node,
+            snp_id_inc=args.snp_id_inc, snp_id_exc=args.snp_id_exc)
 
         # It appears to me that the pard list contains
         # partial derivatives matrices for every study
@@ -718,7 +670,9 @@ def main(argv=None):
         else:
             protocol = None
 
-        meta_pard = MetaParData(partial_derivatives_folders, args.study_name, protocol=protocol)
+        meta_pard = MetaParData(partial_derivatives_folders, args.study_name,
+                                protocol=protocol,
+                                allow_missingness=args.allow_missingness)
 
         is_no_b4_present_in_partial_derivatives = np.sum(b4_presence_per_study) == 0
         if not is_no_b4_present_in_partial_derivatives:
@@ -734,7 +688,7 @@ def main(argv=None):
         meta_phen = MetaPhenotype(phen,
                                   include=args.ph_id_inc,
                                   exclude=args.ph_id_exc,
-                                  allow_missingness = args.allow_missingness)
+                                  allow_missingness=args.allow_missingness)
 
         gen = []
         with Timer() as t:
@@ -876,6 +830,42 @@ def main(argv=None):
     end = time.time()
 
     print ('experiment finished in {} s'.format((end - start)))
+
+
+def load_mapper(mapper_chunk_size, study_name, ref_name,
+                mapper_folder, encoded, cluster, node,
+                snp_id_inc=None, snp_id_exc=None):
+    # Create Mapper object. This mapper object makes us able to synchronise across al variants
+    # in each of the separate datasets
+    mapper = Mapper()
+    # We set the chunk size in this mapper. Each chunk is analyzed separately.
+    mapper.chunk_size = mapper_chunk_size
+    # Assign study and reference names
+    mapper.genotype_names = study_name
+    mapper.reference_name = ref_name  # Reference dataset
+    # Check if we are to exlude, or explicitly include some set of variants
+    if snp_id_inc is not None:  # If this is not none the argument contains a table of snps to include
+        mapper.include = pd.DataFrame.from_csv(snp_id_inc, index_col=None)
+        print 'Include:'
+        print mapper.include.head()
+        if 'ID' not in mapper.include.columns and (
+                'CHR' not in mapper.include.columns or 'bp' not in mapper.include.columns):
+            raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_inc))
+    if snp_id_exc is not None:  # If this is not None the argument contains a table of snps to exclude
+        mapper.exclude = pd.DataFrame.from_csv(snp_id_exc, index_col=None)
+        print 'Exclude:'
+        print mapper.exclude.head()
+        if 'ID' not in mapper.exclude.columns and (
+                'CHR' not in mapper.exclude.columns or 'bp' not in mapper.exclude.columns):
+            raise ValueError('{} table does not have ID or CHR,bp columns'.format(snp_id_exc))
+    # Load the mapper files for each of the datasets
+    mapper.load(mapper_folder)  # Load the mapper files
+    # Load the flip files for each of the datasets
+    mapper.load_flip(mapper_folder, encode=encoded)  # often args.encoded is is null
+    # For cluster stuff:
+    mapper.cluster = cluster  # Is n by default
+    mapper.node = node
+    return mapper
 
 
 if __name__ == '__main__':

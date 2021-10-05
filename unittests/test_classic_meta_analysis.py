@@ -300,6 +300,19 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
     def test_metaAnalysisResults(self):
 
+        # Load expected results
+        output_list = list()
+
+        for study_name in self.hase_executor.study_names:
+            output_list.append(pd.read_csv(
+                os.path.join(self.data_dir, study_name, "results.txt"),
+                delimiter="\t"))
+
+
+
+
+
+
         # Load actual results
         file_names = glob.glob(os.path.join(self.hase_executor.results_directory, "*.pkl"))
         actual_results = pd.concat([pd.read_pickle(f) for f in file_names])

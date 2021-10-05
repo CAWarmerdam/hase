@@ -467,8 +467,8 @@ class CohortAnalyser:
         self.analyser.rsid = variant_names
 
     def get_sample_sizes(self):
-        sample_sizes = np.full((self.variant_indices.shape[0], self.phenotype_indices.shape[0]), self.sample_size)
-        sample_sizes[np.ix_(self.variant_indices == -1, self.phenotype_indices == -1)] = 0
+        sample_sizes = np.zeros((self.variant_indices.shape[0], self.phenotype_indices.shape[0]))
+        sample_sizes[np.ix_(self.variant_indices != -1, self.phenotype_indices != -1)] = self.sample_size
         return sample_sizes
 
     def get_variant_names(self, variant_names):

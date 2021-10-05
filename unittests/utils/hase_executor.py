@@ -131,7 +131,9 @@ class HaseExecutor:
                             ["-encoded"], ["1"] * len(self.study_names),
                             ["-ref_name", self.ref_name],
                             ["-mapper_chunk", "30"],
-                            ["-mode", "meta-classic"]]
+                            ["-mode", "meta-classic"],
+                            ["-allow_missingness"]
+                            ]
 
         argv = [arg for sub_arg in command_of_lists for arg in sub_arg]
 

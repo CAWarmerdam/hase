@@ -76,6 +76,9 @@ def main(argv=None):
     parser.add_argument("-g", "--genotype", nargs='+', type=str, help="path/paths to genotype data folder")
     parser.add_argument("-ph", "--phenotype", nargs='+', type=str, help="path to phenotype data folder")
     parser.add_argument("-cov", "--covariates", type=str, help="path to covariates data folder")
+    parser.add_argument("-ci", "--covariate-indices", type=str,
+                        help="path to tab-delimited file with each row representing "
+                             "the indices of covariates to include in the classical meta-analysis")
 
     parser.add_argument("-derivatives", nargs='+', type=str, help="path to derivatives data folder")
 
@@ -714,8 +717,29 @@ def main(argv=None):
                     row_index["covariates"].shape[0],
                     np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders])))
 
+        covariate_indices = None
+        if args.covariate_indices:
+
+            covariate_indices_df = pd.read_csv(
+                args.covariate_indices,
+                sep="\t", header=None, dtype=str, index_col=0)
+
+            covariate_indices = covariate_indices_df.apply(
+                lambda col: col.astype(np.float), axis=1).T.to_dict('list')
+
+            for key, indices in covariate_indices.items():
+                if np.min(indices) < 1:
+                    raise ValueError(
+                        'Lowest covariate index below 1 for cohort {}. '
+                        'Covariate indices must start at 1 or above.'.format(
+                            key
+                        ))
+
+                covariate_indices[key] = np.array(indices).astype(int)
+
         classic_meta_analyser = ClassicMetaAnalyser(
-            meta_phen, meta_pard, intersecting_identifiers, row_index, args.study_name, args.out)
+            meta_phen, meta_pard, intersecting_identifiers, row_index, args.study_name, args.out,
+            covariate_indices=covariate_indices)
 
         # Start looping over all genotype chunks
         # We use while true, since implementing an iterator is apparently

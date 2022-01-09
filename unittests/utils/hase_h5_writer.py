@@ -197,6 +197,10 @@ class HaseHDF5Writer(object):
             print("Loading {}-{} variants to write to chunk {} out of {} total chunks".format(
                 start, end, chunk_index, number_of_chunks))
 
+            if dosage_matrix.shape[0] == 0:
+                print("Empty chunk. Skipping...")
+                continue
+
             # Get the dosages for every variant within the
             for chunked_variant_index, variant_index in enumerate(xrange(start, end)):
                 dosage_matrix[chunked_variant_index,] = genotype_data.get_dosages(variant_index)

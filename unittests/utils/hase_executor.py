@@ -12,6 +12,7 @@ from tools import mapper
 class HaseExecutor:
     def __init__(self, working_dir, project_root, study_names):
 
+        self._covariate_indices_path = None
         self.study_names = study_names
         self.project_root = project_root
         self.test_dir = working_dir
@@ -122,10 +123,10 @@ class HaseExecutor:
         # We need to get the mapper files. The mapper files 'flip' and 'values' have to be moved to a single
         # folder
 
-        command_of_lists = [["-g"], self.get_folders_all_studies(self.get_meta_genotype_folder),
+        command_of_lists = [["-g"], self.run_func_all_studies(self.get_meta_genotype_folder),
                             ["-study_name"], self.study_names,
-                            ["-ph"], self.get_folders_all_studies(self.get_meta_phenotype_folder),
-                            ["-derivatives"], self.get_folders_all_studies(self.get_partial_derivatives_meta_folder),
+                            ["-ph"], self.run_func_all_studies(self.get_meta_phenotype_folder),
+                            ["-derivatives"], self.run_func_all_studies(self.get_partial_derivatives_meta_folder),
                             ["-mapper", self.get_meta_mapper_folder()],
                             ["-o", self.results_directory],
                             ["-encoded"], ["1"] * len(self.study_names),
@@ -135,11 +136,15 @@ class HaseExecutor:
                             ["-allow_missingness"]
                             ]
 
+        covariate_indices_path = self.get_covariate_indices_path()
+        if covariate_indices_path:
+            command_of_lists.append(["--covariate-indices", covariate_indices_path])
+
         argv = [arg for sub_arg in command_of_lists for arg in sub_arg]
 
         hase.main(argv)
 
-    def get_folders_all_studies(self, func):
+    def run_func_all_studies(self, func):
         return [func(cohort_name) for cohort_name in self.study_names]
 
     def get_meta_mapper_folder(self):
@@ -153,3 +158,20 @@ class HaseExecutor:
             os.path.exists(self.get_mapper_folder(study_name))]
 
         return False not in path_presence_list
+
+    def meta_analyse(self, data_dir):
+        for cohort_name in self.study_names:
+            if not self.per_cohort_results_exist(cohort_name):
+                self.per_cohort_analysis(data_dir, cohort_name)
+
+        if not os.path.exists(self.get_meta_mapper_folder()):
+            self.prepare_mapper_meta_folder()
+
+        if not os.path.exists(self.results_directory):
+            self.meta_classic()
+
+    def get_covariate_indices_path(self):
+        return self._covariate_indices_path
+
+    def set_covariate_indices_path(self, path):
+        self._covariate_indices_path = path

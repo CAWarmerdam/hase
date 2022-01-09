@@ -19,19 +19,21 @@ class HaseException(Exception):
 
 class ClassicMetaAnalyser:
     def __init__(self, meta_phen, meta_pard,
-                 sample_intersection, sample_indices, study_names, out):
+                 sample_intersection, sample_indices,
+                 study_names, out, covariate_indices=None):
         self.meta_pard = meta_pard
         self.meta_phen = meta_phen
         self.out = out
         self.cohort_list = self.construct_cohort_list(
-            meta_pard, sample_intersection, sample_indices, study_names)
+            meta_pard, sample_intersection, sample_indices,
+            study_names, covariate_indices=covariate_indices)
         self.output_type = "pkl"
         self.results = None
         self.results_index = 0
 
     @staticmethod
     def construct_cohort_list(meta_pard, sample_intersection,
-                              sample_indices, study_names):
+                              sample_indices, study_names, covariate_indices=None):
         # Build a list of studies / cohorts
         cohort_list = list()
         # Loop through studies / cohort names
@@ -45,9 +47,19 @@ class ClassicMetaAnalyser:
             study_row_indices = select_identifiers(
                 study_index, sample_indices, sample_intersection)
 
+            # Get if covariate indices for this study
+            covariate_indices_this_study = None
+            if covariate_indices is not None:
+                # If covariate indices are not goven for this study
+                # we can skip these. We make sure a keyerror is not thrown
+                # by using None as a default.
+                covariate_indices_this_study = covariate_indices.get(
+                    study_name, None)
+
             # Initialize the cohort analysis
             cohort = CohortAnalyser(
-                study_index, study_name, study_row_indices, sample_size)
+                study_index, study_name, study_row_indices, sample_size,
+                covariate_indices_this_study)
 
             # Add a dictionary as an index matching phenotypes to
             # indices in the partial derivatives C and b_cov
@@ -258,19 +270,20 @@ class CohortAnalyser:
     """
 
     def __init__(self, study_index, study_name, row_index,
-                 sample_size,
+                 sample_size, covariate_indices=None,
                  maf_threshold=0,
                  a_test=None, b_cov=None, C=None, a_cov=None):
+        self._covariate_indices = covariate_indices
         self.unknown_dimension_size = 1
         self.sample_size = sample_size
-        self.a_cov = a_cov
-        self.a_test = a_test
+        self._a_cov = a_cov
+        self._a_test = a_test
         self.a_inv = None
         self.phenotype_names = None
         self.variant_indices = None
         self.phenotype_indices = None
         self.C = C
-        self.b_cov = b_cov
+        self._b_cov = b_cov
         self.study_name = study_name
         self.study_index = study_index
         self.sample_indices = row_index
@@ -284,10 +297,10 @@ class CohortAnalyser:
         """
         Set partial derivatives.
         """
-        self.b_cov = b_cov
+        self._b_cov = b_cov
         self.C = C
-        self.a_test = a_test
-        self.a_cov = a_cov
+        self._a_test = a_test
+        self._a_cov = a_cov
 
     def set_partial_derivatives_phenotype_index(self, index):
         """
@@ -297,22 +310,48 @@ class CohortAnalyser:
         self.partial_derivatives_phenotype_index = index
 
     def finalize_partial_derivatives(self):
-        if self.variant_indices is None:
-            raise HaseException("variant indices must be set prior to finalizing partial derivatives")
-        self.a_test = self.a_test[self.variant_indices != -1]
+        a_test = self.get_a_test()
+        a_cov = self.get_a_cov()
 
         # Use new A_inverse that supports variable number of non-constant A parts
-        self.a_inv = get_a_inverse_extended(self.a_cov, self.a_test)
+        self.a_inv = get_a_inverse_extended(a_cov, a_test)
 
         self._set_number_of_variable_terms()
         self._set_number_of_constant_terms()
         self._finalized = True
 
+    def get_a_cov(self):
+        return self._a_cov[np.ix_(self.get_covariate_indices(),
+                                  self.get_covariate_indices())]
+
+    def get_a_test(self):
+        if self.variant_indices is None:
+            raise HaseException("variant indices must be set when working with partial derivatives")
+
+        # When slicing a_test, we need to account for the variable terms, which
+        # we need to all maintain.
+
+        # We do this by first calculating which indices these should correspond
+        # with:
+        indices_of_variable_terms = np.arange(
+            self._a_test.shape[1] - self._a_test.shape[2],  # The second dimension (1) of a_test corresponds to the
+            # number of total independent variables, (constant terms, including the intercept, and variable terms)
+            # The third dimension (2) corresponds to the number of variable terms. This is most commonly 1. but when
+            # interaction terms are included (not fully supported at the time of writing this) this can exceed 1.
+            # Subtracting both numbers should result in just the number of constant terms (including intercept)
+            self._a_test.shape[1])  # Stop at the total number of independent variables (exclusive).
+
+        # Now we
+        covariate_indices_with_variable_terms = np.append(
+            self.get_covariate_indices(), indices_of_variable_terms)
+
+        return self._a_test[np.ix_(self.variant_indices != -1, covariate_indices_with_variable_terms)]
+
     def _set_number_of_constant_terms(self):
-        self.number_of_constant_terms = self.a_inv.shape[1] - self.a_test.shape[2]
+        self.number_of_constant_terms = self.get_a_cov().shape[0]
 
     def _set_number_of_variable_terms(self):
-        self.number_of_variable_terms = self.a_test.shape[2]
+        self.number_of_variable_terms = self.get_a_test().shape[2]
 
     def set_observed_maf(self, maf):
         self.analyser.maf = maf
@@ -375,7 +414,7 @@ class CohortAnalyser:
         :return: matrix b_cov
         """
         phenotype_indexes_for_partial_derivatives = self.get_phenotype_slicer_for_partial_derivatives()
-        return self.b_cov[:, phenotype_indexes_for_partial_derivatives]
+        return self._b_cov[np.ix_(self.get_covariate_indices(), phenotype_indexes_for_partial_derivatives)]
 
     def get_C(self):
         """
@@ -495,3 +534,13 @@ class CohortAnalyser:
             return betas[np.ix_(self.variant_indices != -1, self.phenotype_indices != -1)]
         return betas
 
+    def get_covariate_indices(self):
+        """
+        Method that returns the covariate indices with a 0 included. This way
+        it will also maintain the intercept thingy.
+        :return:
+        """
+        if self._covariate_indices is None:
+            return np.arange(self._a_cov.shape[0])
+
+        return np.insert(self._covariate_indices, obj=0, values=0, axis=0)

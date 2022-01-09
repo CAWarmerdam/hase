@@ -46,9 +46,10 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         #self.test_dir = tempfile.mkdtemp()
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
-        self.data_dir = os.path.join(self.resources_dir, "missingness")
+        self.dataset = "complexdataset"
+        self.data_dir = os.path.join(self.resources_dir, "%s" % self.dataset)
 
-        self.test_dir = os.path.join(self.project_root, "unittests", "missingness", "out")
+        self.test_dir = os.path.join(self.project_root, "unittests", self.dataset, "out")
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
@@ -58,18 +59,11 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         self.hase_executor = HaseExecutor(self.test_dir, self.project_root,
                                           self.expected_variant_indices.index)
 
-        for cohort_name in self.hase_executor.study_names:
-            if not self.hase_executor.per_cohort_results_exist(cohort_name):
-                self.hase_executor.per_cohort_analysis(self.data_dir, cohort_name)
+        self.hase_executor.meta_analyse(self.data_dir)
 
-        if not os.path.exists(self.hase_executor.get_meta_mapper_folder()):
-            self.hase_executor.prepare_mapper_meta_folder()
-
-        if not os.path.exists(self.hase_executor.results_directory):
-            self.hase_executor.meta_classic()
 
     def tearDown(self):
-        pass
+            pass
 
 
     def test_mapperGetNonMissing(self):
@@ -162,14 +156,14 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             expected_genotypes.loc[actual_keys,:].values))
 
     def test_CohortAnalyser(self):
-        study_name = "test_0"
-        study_index = 0
+        study_name = "test_2"
+        study_index = 2
         allow_missingness = True
 
         genotypes_path = os.path.join(self.data_dir, study_name, "genotypes.csv")
         genotypes = pd.read_csv(genotypes_path, delimiter="\t", index_col='ID')
 
-        phenotypes_path = os.path.join(self.data_dir, study_name, "phenotypes", "test_0.txt")
+        phenotypes_path = os.path.join(self.data_dir, study_name, "phenotypes", study_name + ".txt")
         phenotypes = pd.read_csv(phenotypes_path, delimiter="\t", index_col='id')
 
         expected_b4_data_frame = pd.DataFrame(
@@ -192,7 +186,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         partial_derivatives_folders = []
 
-        for i, j in enumerate(self.hase_executor.get_folders_all_studies(
+        for i, j in enumerate(self.hase_executor.run_func_all_studies(
                     self.hase_executor.get_partial_derivatives_meta_folder)):
                 partial_derivatives_folders.append(Reader('partial'))
                 partial_derivatives_folders[i].start(j, study_name=self.hase_executor.study_names[i])
@@ -203,7 +197,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                                 allow_missingness=allow_missingness)
 
         phen = []
-        for i, j in enumerate(self.hase_executor.get_folders_all_studies(
+        for i, j in enumerate(self.hase_executor.run_func_all_studies(
                 self.hase_executor.get_meta_phenotype_folder)):
             phen.append(Reader('phenotype'))
             phen[i].start(j)
@@ -212,7 +206,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             include=None, exclude=None, allow_missingness=allow_missingness)
 
         gen = []
-        for i, j in enumerate(self.hase_executor.get_folders_all_studies(
+        for i, j in enumerate(self.hase_executor.run_func_all_studies(
                     self.hase_executor.get_meta_genotype_folder)):
             gen.append(Reader('genotype'))
             gen[i].start(j, hdf5=True, study_name=self.hase_executor.study_names[i], ID=False)
@@ -248,11 +242,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             columns=cohort.get_phenotype_names(phenotype_names),
             index=cohort.get_variant_names(keys))
 
-        self.assertTrue(np.allclose(
-            expected_b4_data_frame.loc[
-                actual_b4_data_frame.index,
-                actual_b4_data_frame.columns].values,
-            actual_b4_data_frame.values))
+        self.compare_actual_matrix_to_expected(actual_b4_data_frame, expected_b4_data_frame)
 
         cohort.analyse(genotype, phenotype)
         actual_betas = pd.DataFrame(
@@ -260,11 +250,20 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             columns=cohort.get_phenotype_names(phenotype_names),
             index=cohort.get_variant_names(keys))
 
+        self.compare_actual_matrix_to_expected(actual_betas, expected_betas)
+
+    def compare_actual_matrix_to_expected(self, actual_data_frame, expected_data_frame):
+        self.assertTrue(np.all(np.isin(
+            expected_data_frame.index.values,
+            actual_data_frame.index.values)))
+        self.assertTrue(np.all(np.isin(
+            expected_data_frame.columns.values,
+            actual_data_frame.columns.values)))
         self.assertTrue(np.allclose(
-            expected_betas.loc[
-                actual_betas.index,
-                actual_betas.columns].values,
-            actual_betas.values))
+            expected_data_frame.loc[
+                actual_data_frame.index,
+                actual_data_frame.columns].values,
+            actual_data_frame.values))
 
     def test_MetaPhenotypeGetMissingness(self):
         expected_phenotypes = self.expected_phenotypes()
@@ -308,11 +307,6 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                 os.path.join(self.data_dir, study_name, "results.txt"),
                 delimiter="\t"))
 
-
-
-
-
-
         # Load actual results
         file_names = glob.glob(os.path.join(self.hase_executor.results_directory, "*.pkl"))
         actual_results = pd.concat([pd.read_pickle(f) for f in file_names])
@@ -320,8 +314,15 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             os.path.join(self.data_dir, "meta.txt"), delimiter='\t')
         print(actual_results)
 
-        merged = pd.merge(actual_results,expected_results, how="inner", on=["variant", "phenotype"])
-        self.assertTrue(np.allclose(merged.standard_error_x.values, merged.standard_error_y.values))
+        merged = pd.merge(
+            actual_results, expected_results,
+            how="inner", on=["variant", "phenotype"],
+            suffixes=('_actual', '_expected'))
+
+        merged["beta_isclose"] = np.isclose(
+            merged["beta_actual"], merged["beta_expected"])
+
+        self.assertTrue(np.allclose(merged.standard_error_actual.values, merged.standard_error_expected.values))
 
     def expected_phenotypes(self):
         expected_phenotype_list = list()

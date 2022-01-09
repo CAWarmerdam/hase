@@ -397,6 +397,36 @@ class TestMissingnessFunctions(unittest.TestCase):
         self.assertTrue(np.allclose(a_inverse, a_inverse_expected))
 
 
+class TestPermutationStrategies(unittest.TestCase):
+    number_of_individuals = 81
+    number_of_variants = 8
+
+    def test_without_interactions(self):
+        """
+        We want to test here what a permutation strategy could look like using
+        the encoded matrices in hase.
+        """
+        genotype_matrix = get_genotype_matrix(self.number_of_individuals,
+                                              self.number_of_variants)
+        covariates_matrix = get_covariates_matrix(self.number_of_individuals, 1)  # One covariate
+        covariates_matrix_extended = covariates_matrix.repeat(self.number_of_variants, axis=1)
+        base_x = np.stack((covariates_matrix_extended, genotype_matrix.T), axis=1)
+        matrix_with_determinants_x = get_x_no_interaction(base_x)
+
+        phenotype_matrix = get_phenotype_matrix_no_interaction(matrix_with_determinants_x)[:, 0:10]
+
+        # Encode the data
+        encoder = EncoderCopy(self.number_of_individuals)
+        genotype_matrix_encoded = encoder.encode_genotype_matrix(genotype_matrix)
+        phenotype_matrix_encoded = encoder.encode_with_inverse(phenotype_matrix)
+
+        indices = np.arange(self.number_of_individuals)
+        permutation_indices = np.random.permutation(indices)
+
+        permuted_phenotype_matrix_encoded = encoder.encode_with_inverse(phenotype_matrix[permutation_indices,:])
+        B4_new = B4(phenotype_matrix_encoded[permutation_indices,:], genotype_matrix_encoded)
+        B4_theoretical = B4(permuted_phenotype_matrix_encoded, genotype_matrix_encoded)
+
 
 def get_single_study_data(number_of_individuals, number_of_variants):
     genotype_matrix = get_genotype_matrix(number_of_individuals,

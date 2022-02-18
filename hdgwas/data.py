@@ -821,7 +821,7 @@ class MetaParData(object):
         maf = maf / np.float(samples)
         return maf
 
-    def minor_allele_frequencies_study(self, study_name, study_index, SNPs_index):
+    def minor_allele_frequencies_study(self, SNPs_index, study_name, study_index):
         return np.array(self.pd[study_name].folder._data.metadata['MAF'])[SNPs_index[study_index]]
 
     def get_n_id(self):

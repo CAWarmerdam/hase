@@ -121,9 +121,9 @@ class ClassicMetaAnalyser:
             cohort.set_partial_derivatives(a_test, b_cov, C, a_cov)
             # Add the maf filter for this cohort
             cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
+                SNPs_index=variant_indices,
                 study_name=cohort.study_name,
-                study_index=cohort.study_index,
-                SNPs_index=variant_indices))
+                study_index=cohort.study_index))
             cohort.set_variant_indices(variant_indices[cohort.study_index])
             cohort.set_variant_filter(cohort.maf_filter())
             # Apply filters on partial derivatives and calculate processed

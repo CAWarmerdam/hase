@@ -17,7 +17,7 @@ from unittests.test_hdregression import get_single_study_data
 from unittests.utils.hase_executor import HaseExecutor
 
 
-class TestClassicMetaAnalyser(unittest.TestCase):
+class TestCohortSpecificCovariates(unittest.TestCase):
 
     def setUp(self):
         """
@@ -88,4 +88,3 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         self.assertTrue(np.allclose(merged.standard_error_tested.values,
                                     merged.standard_error_expected.values))
-

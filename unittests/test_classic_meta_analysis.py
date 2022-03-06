@@ -46,18 +46,17 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         #self.test_dir = tempfile.mkdtemp()
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
-        self.dataset = "complexdataset"
+        self.dataset = "freqdataset"
         self.data_dir = os.path.join(self.resources_dir, "%s" % self.dataset)
 
         self.test_dir = os.path.join(self.project_root, "unittests", self.dataset, "out")
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
-        self.expected_variant_indices = load_expected_variant_indices(
-            os.path.join(self.data_dir, "variant_indices.txt"))
+        self.study_names = ["test_0", "test_1", "test_2"]
 
         self.hase_executor = HaseExecutor(self.test_dir, self.project_root,
-                                          self.expected_variant_indices.index)
+                                          self.study_names)
 
         self.hase_executor.meta_analyse(self.data_dir)
 
@@ -221,8 +220,9 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         row_index, intersecting_identifiers = get_intersecting_individual_indices(datasets)
 
         classic_meta_analyser = meta_classic.ClassicMetaAnalyser(
-            meta_phen, meta_pard, intersecting_identifiers, row_index, self.hase_executor.study_names,
-            self.hase_executor.results_directory)
+            meta_phen, meta_pard, intersecting_identifiers,
+            row_index, self.hase_executor.study_names,
+            self.hase_executor.results_directory, maf_threshold=0.05)
 
         variant_indices, keys = mapper.get(
             allow_missingness=allow_missingness)
@@ -322,7 +322,9 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         merged["beta_isclose"] = np.isclose(
             merged["beta_actual"], merged["beta_expected"])
 
-        self.assertTrue(np.allclose(merged.standard_error_actual.values, merged.standard_error_expected.values))
+        self.assertTrue(np.allclose(
+            merged.standard_error_actual.values,
+            merged.standard_error_expected.values))
 
     def expected_phenotypes(self):
         expected_phenotype_list = list()

@@ -84,8 +84,7 @@ class TestDataGenerator:
         for cohort_name, number_of_individuals in self.number_of_individuals_per_cohort.items():
             index_stop += number_of_individuals
             cohort_individual_indices[cohort_name] = (index_start, index_stop)
-            index_stop = index_start
-            index_start += number_of_individuals
+            index_start = index_stop
         return cohort_individual_indices
 
     def get_individual_ids(self, index_lower, index_upper):
@@ -111,10 +110,23 @@ class TestDataGenerator:
         self.phenotype_matrix = phenotype_matrix
 
     def generate_genotype_matrix(self):
-        return np.random.randint(
-            0, 3, self.number_of_variants * self.number_of_individuals) \
-            .reshape(self.number_of_variants, self.number_of_individuals) \
-            .astype(np.float)
+        maf_array = np.linspace(0, 0.5, self.number_of_variants)
+        np.random.shuffle(maf_array)
+
+        genotypes = list()
+
+        for maf in maf_array:
+            freq_aa = (1-maf)**2
+            freq_ab = 2*maf*(1-maf)
+            freq_bb = maf**2
+
+            genotypes.append(
+                np.random.choice([0, 1, 2], self.number_of_individuals,
+                                 replace=True,
+                                 p=[freq_aa, freq_ab, freq_bb]))
+
+        return (np.vstack(genotypes)
+                .astype(np.float))
 
     def generate_covariate_matrix(self):
         return np.random.randint(0, 4, self.number_of_individuals * self.number_of_covariates) \
@@ -198,7 +210,8 @@ class TestDataGenerator:
 
         return genotype_data_list
 
-    def _generate_missingness_indices_for_cohort(self, size, missingness_rate=0.05, keep_order=True):
+    def _generate_missingness_indices_for_cohort(self, size, missingness_rate=0.05, keep_order=True,
+                                                 missingness_value=None):
 
         if keep_order:
             indices = np.arange(size)
@@ -211,30 +224,53 @@ class TestDataGenerator:
             n_missing = np.sum(np.random.choice((True, False),
                 size=size, p=(missingness_rate, 1 - missingness_rate)))
 
-            indices[indices >= (size - n_missing)] = -1
+            if missingness_value is None:
+                indices[indices >= (size - n_missing)] = indices[indices >= (size - n_missing)] * -1
+            else:
+                indices[indices >= (size - n_missing)] = missingness_value
 
         return indices
 
     def generate_variant_indices(self, missingness_rate=None):
         names = self.variant_data_frame['ID'].values
-        array = self.generate_missingness_indices(names, missingness_rate, keep_order=False)
-        return array
+        missingness_dataframe = self.generate_missingness_indices(
+            names, missingness_rate, keep_order=False)
+
+        # for cohort_name, cohort_individual_indices in self.cohort_individual_indices.items():
+        #
+        #     # The indices indicate where in the on disk dataset each of the
+        #     # variants are present.
+        #
+        #     variant_order = np.abs(
+        #         missingness_dataframe.loc[cohort_name, :].to_numpy())
+        #     cohort_individual_ranges = np.arange(*cohort_individual_indices)
+        #
+        #     self.independent_variable_matrix[:,
+        #     cohort_individual_ranges[:,np.newaxis],
+        #     variant_order[np.newaxis,:]] = (
+        #         self.independent_variable_matrix[:,
+        #         cohort_individual_ranges, :])
+
+        return missingness_dataframe.mask(missingness_dataframe < 0., -1, inplace=False)
 
     def generate_phenotype_indices(self, missingness_rate=None):
         array = self.generate_missingness_indices(
-            self.phenotype_names, missingness_rate, keep_order=False)
+            self.phenotype_names, missingness_rate, keep_order=False, missingness_value=-1)
         return array
 
-    def generate_missingness_indices(self, names, missingness_rate=None, keep_order=True):
+    def generate_missingness_indices(self, names, missingness_rate=None, keep_order=True,
+                                     missingness_value=None):
         if missingness_rate is None:
             missingness_rate = [0.05] * self.number_of_cohorts()
         if len(missingness_rate) != self.number_of_cohorts():
             raise Exception("length of missingness rate, not matching number of cohorts")
+
         indices = list()
         for rate in missingness_rate:
             indices.append(
                 self._generate_missingness_indices_for_cohort(
-                    len(names), rate, keep_order=keep_order))
+                    len(names), rate, keep_order=keep_order,
+                    missingness_value=missingness_value))
         array = pd.DataFrame(np.array(indices), index=self.cohort_names,
                              columns=names)
         return array
@@ -291,7 +327,8 @@ class TestDataGenerator:
             cohort_indices = indices.loc[cohort_name].values
 
             cohort_data_list[cohort_name] = self.slice_cohort_data_missingness(
-                matrix, cohort_indices, names,
+                matrix[cohort_individual_indices[0]:cohort_individual_indices[1], :],
+                cohort_indices, names,
                 cohort_individual_indices)
 
         return cohort_data_list
@@ -307,7 +344,7 @@ class TestDataGenerator:
             sliced_indices.shape[0]),
             cohort_indices)
         cohort_data = np.empty((matrix.shape[0], cohort_indices.shape[0]))
-        cohort_data[:, sliced_indices] = matrix[:, cohort_indices != -1]
+        cohort_data[:, sliced_indices] = matrix[:,cohort_indices != -1]
 
         if not np.all(np.equal(
                 cohort_data[:, sliced_indices],
@@ -393,10 +430,22 @@ class TestDataGenerator:
                                  variants_indices, phenotypes_indices):
         out_list = list()
         for variant_index in variants_indices:
+            variant_genotypes = independent_variables[
+                len(independent_variables)-1, :, variant_index]
+
+            freq_a, freq_b = self.allele_frequencies(variant_genotypes)
+
+            print("allele freq: ", freq_b, freq_a)
+
+            if freq_b < 0.05 or freq_a < 0.05:
+                continue
+
+            print("fitting models for variant...")
             for phenotype_index in phenotypes_indices:
+
                 results = fit_model(
                     independent_variables[..., variant_index].T,
-                    dependent_variables[..., phenotype_index]).iloc[[3]]
+                    dependent_variables[..., phenotype_index]).iloc[[-1]]
                 results['phenotype'] = self.phenotype_names[phenotype_index]
                 results['variant'] = self.variant_data_frame['ID'][variant_index]
 
@@ -406,10 +455,26 @@ class TestDataGenerator:
         cohort_results = cohort_results.set_index(keys=["variant", "phenotype"])
         return cohort_results
 
+    def allele_frequencies(self, variant_genotypes):
+        number_of_participants = float(len(variant_genotypes))
+        freq_aa = np.count_nonzero(variant_genotypes == 0.) / number_of_participants
+        freq_ab = np.count_nonzero(variant_genotypes == 1.) / number_of_participants
+        freq_bb = np.count_nonzero(variant_genotypes == 2.) / number_of_participants
+        freq_a = freq_aa + freq_ab * 0.5
+        freq_b = freq_bb + freq_ab * 0.5
+        return freq_a, freq_b
+
     def meta_analyse(self, output_list):
         combinations = list(itertools.product(self.variant_data_frame['ID'].values, self.phenotype_names))
         effect_sizes = np.array([output.loc[combinations, "Coefficients"].values for output in output_list])
         standard_error = np.array([output.loc[combinations, "Standard Errors"].values for output in output_list])
+
+        combinations_to_remove = np.all(np.isnan(effect_sizes), axis=0)
+        effect_sizes = effect_sizes[:, ~combinations_to_remove]
+        standard_error = standard_error[:, ~combinations_to_remove]
+        combinations_array = pd.DataFrame(
+            np.array(combinations)[~combinations_to_remove],
+            columns=["variant", "phenotype"])
 
         variance = standard_error ** 2
 
@@ -431,8 +496,9 @@ class TestDataGenerator:
         meta_analysed_effect_sizes = effect_size_divided_by_variance_total / one_divided_by_variance_total
         meta_analysed_standard_error = np.sqrt(1 / one_divided_by_variance_total)
 
-        return pd.DataFrame(np.array([meta_analysed_effect_sizes, meta_analysed_standard_error]).T,
-                            index=pd.MultiIndex.from_tuples(combinations), columns=["beta", "standard_error"])
+        meta_analysis_results = pd.DataFrame(np.array([meta_analysed_effect_sizes, meta_analysed_standard_error]).T,
+                             index=pd.MultiIndex.from_frame(combinations_array), columns=["beta", "standard_error"])
+        return meta_analysis_results[meta_analysis_results['beta'].notna()]
 
     def set_covariate_indices(self, covariate_indices):
         self._covariate_indices = covariate_indices
@@ -543,19 +609,19 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    # generate_dataset_with_missingness(
-    #     variants_data_frame=sample_variants_from_ref(DEFAULT_NUMBER_OF_VARIANTS),
-    #     number_of_phenotypes=DEFAULT_NUMBER_OF_PHENOTYPES,
-    #     number_of_covariates=DEFAULT_NUMBER_OF_COVARIATES,
-    #     base_output_path="../resources/complexdataset/",
-    #     )
-
-    generate_covariate_subsetting_dataset(
+    generate_dataset_with_missingness(
         variants_data_frame=sample_variants_from_ref(DEFAULT_NUMBER_OF_VARIANTS),
         number_of_phenotypes=DEFAULT_NUMBER_OF_PHENOTYPES,
-        number_of_covariates=4,
-        base_output_path="../resources/covariatesubsetting/"
-    )
+        number_of_covariates=DEFAULT_NUMBER_OF_COVARIATES,
+        base_output_path="../resources/freqdataset/",
+        )
+    #
+    # generate_covariate_subsetting_dataset(
+    #     variants_data_frame=sample_variants_from_ref(DEFAULT_NUMBER_OF_VARIANTS),
+    #     number_of_phenotypes=DEFAULT_NUMBER_OF_PHENOTYPES,
+    #     number_of_covariates=4,
+    #     base_output_path="../resources/covariatesubsetting/"
+    # )
 
 
 if __name__ == "__main__":

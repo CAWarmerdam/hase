@@ -18,22 +18,29 @@ class HaseException(Exception):
 
 
 class ClassicMetaAnalyser:
-    def __init__(self, meta_phen, meta_pard,
-                 sample_intersection, sample_indices,
-                 study_names, out, covariate_indices=None):
+    def __init__(
+            self,
+            meta_phen, meta_pard,
+            sample_intersection, sample_indices, study_names,
+            out,
+            covariate_indices=None,
+            maf_threshold=0.0):
+
         self.meta_pard = meta_pard
         self.meta_phen = meta_phen
         self.out = out
         self.cohort_list = self.construct_cohort_list(
             meta_pard, sample_intersection, sample_indices,
-            study_names, covariate_indices=covariate_indices)
+            study_names, covariate_indices=covariate_indices,
+            maf_threshold=maf_threshold)
         self.output_type = "pkl"
         self.results = None
         self.results_index = 0
 
     @staticmethod
-    def construct_cohort_list(meta_pard, sample_intersection,
-                              sample_indices, study_names, covariate_indices=None):
+    def construct_cohort_list(meta_pard, sample_intersection, sample_indices,
+                              study_names, covariate_indices,
+                              maf_threshold=0.0):
         # Build a list of studies / cohorts
         cohort_list = list()
         # Loop through studies / cohort names
@@ -59,7 +66,7 @@ class ClassicMetaAnalyser:
             # Initialize the cohort analysis
             cohort = CohortAnalyser(
                 study_index, study_name, study_row_indices, sample_size,
-                covariate_indices_this_study)
+                covariate_indices_this_study, maf_threshold=maf_threshold)
 
             # Add a dictionary as an index matching phenotypes to
             # indices in the partial derivatives C and b_cov
@@ -177,7 +184,9 @@ class ClassicMetaAnalyser:
 
         meta_analysis_sample_sizes = self.get_sample_sizes()
 
-        self.set_results(meta_analysed_effect_sizes, meta_analysed_standard_error, meta_analysis_sample_sizes,
+        self.set_results(meta_analysed_effect_sizes,
+                         meta_analysed_standard_error,
+                         meta_analysis_sample_sizes,
                          phenotype_names, variant_names)
 
     def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error, meta_analysis_sample_sizes,
@@ -195,13 +204,13 @@ class ClassicMetaAnalyser:
         print('Saving results to {}'.format(self.out))
 
         # Possibly set a threshold on p-value or Z score or t-statistic
-        results = self.results
+        results = self.results.loc[self.results.sample_size != 0]
         output_path = self.get_output_path(chunk, node)
 
         if self.output_type == "npy":
             np.save(output_path, results)
         elif self.output_type == "pkl":
-            self.results.to_pickle(output_path)
+            results.to_pickle(output_path)
 
         self.results_index += 1
 
@@ -271,7 +280,7 @@ class CohortAnalyser:
 
     def __init__(self, study_index, study_name, row_index,
                  sample_size, covariate_indices=None,
-                 maf_threshold=0,
+                 maf_threshold=0.0,
                  a_test=None, b_cov=None, C=None, a_cov=None):
         self._covariate_indices = covariate_indices
         self.unknown_dimension_size = 1
@@ -370,7 +379,7 @@ class CohortAnalyser:
         self.variant_indices = variant_indices
 
     def set_variant_filter(self, variant_filter):
-        self.variant_indices[not variant_filter] = -1
+        self.variant_indices[~variant_filter] = -1
 
     def set_phenotype_names(self, phenotype_names):
         self.phenotype_names = phenotype_names

@@ -24,6 +24,9 @@ class HaseExecutor:
         assert os.path.isfile(
             os.path.join(self.project_root, "data", "1000Gp1v3.ref_info.h5"))
 
+    def set_test_dir(self, working_dir):
+        self.test_dir = working_dir
+
     def get_meta_folder(self, cohort):
         return os.path.join(self.test_dir, "meta_" + cohort)
 
@@ -39,29 +42,39 @@ class HaseExecutor:
     def get_mapper_folder(self, cohort):
         return os.path.join(self.test_dir, "mapper_" + cohort, "")
 
-    def per_cohort_analysis(self, data_path, study_name):
+    def per_cohort_analysis(self, data_path, study_name,
+                            phenotype_matrix=None):
         # Reference for mapper has to be downloaded
 
         # Start by running mapper?
         hdf5_genotype_directory = os.path.join(data_path, study_name, "genotypes_hdf5")
+        self.per_cohort_mapper_step(hdf5_genotype_directory, study_name)
+
+        # Encode the genotype and phenotype files
+        encoding_output = os.path.join(self.test_dir, "encoded")
+
+        if phenotype_matrix is None:
+            phenotype_matrix = os.path.join(data_path, study_name, "phenotypes")
+
+        cov_interaction_matrix = os.path.join(data_path, study_name, "covariates")
+        self.per_cohort_encoding_step(encoding_output, hdf5_genotype_directory, phenotype_matrix, study_name)
+
+        # Calculate partial derivatives
+        partial_derivatives = os.path.join(self.test_dir, "pd")
+        self.per_cohort_partial_derivatives(cov_interaction_matrix,
+                                            hdf5_genotype_directory, partial_derivatives,
+                                            phenotype_matrix, study_name)
+
+        self.finalize_per_cohort(encoding_output, hdf5_genotype_directory, partial_derivatives, study_name)
+
+    def per_cohort_mapper_step(self, hdf5_genotype_directory, study_name):
         if not os.path.exists(self.get_mapper_folder(study_name)):
             mapper.main(["-g", hdf5_genotype_directory,
                          "-study_name", study_name,
                          "-o", self.get_mapper_folder(study_name)])
 
-        # Encode the genotype and phenotype files
-        encoding_output = os.path.join(self.test_dir, "encoded")
-        phenotype_matrix = os.path.join(data_path, study_name, "phenotypes")
-        cov_interaction_matrix = os.path.join(data_path, study_name, "covariates")
-        hase.main(["-g", hdf5_genotype_directory,
-                   "-study_name", study_name,
-                   "-o", encoding_output,
-                   "-mapper", self.get_mapper_folder(study_name),
-                   "-ph", phenotype_matrix,
-                   "-mode", "encoding"])
-
-        # Calculate partial derivatives
-        partial_derivatives = os.path.join(self.test_dir, "pd")
+    def per_cohort_partial_derivatives(self, cov_interaction_matrix, hdf5_genotype_directory, partial_derivatives,
+                                       phenotype_matrix, study_name):
         hase.main(["-g", hdf5_genotype_directory,
                    "-study_name", study_name,
                    "-o", partial_derivatives,
@@ -70,12 +83,12 @@ class HaseExecutor:
                    "-cov", cov_interaction_matrix,
                    "-mode", "single-meta"])
 
+    def finalize_per_cohort(self, encoding_output, hdf5_genotype_directory, partial_derivatives, study_name):
         # Create directory structure required for meta-analysis
         # Define directory names.
         phenotype_meta = self.get_meta_phenotype_folder(study_name)
         individuals_meta = os.path.join(self.get_meta_genotype_folder(study_name), "individuals")
         actual_genotype_meta = os.path.join(self.get_meta_genotype_folder(study_name), "genotype")
-
         # Copy the probes to genotype_meta. This calls os.makedirs() always,
         # and throws an exception if it already exists.
         # First we remove the genotype_meta if it does already exist
@@ -83,22 +96,27 @@ class HaseExecutor:
             shutil.rmtree(self.get_meta_folder(study_name))
         shutil.copytree(os.path.join(hdf5_genotype_directory, "probes"),
                         os.path.join(self.get_meta_genotype_folder(study_name), "probes"))
-
         # Make the required directories
         # os.makedirs(actual_genotype_meta)
         os.makedirs(individuals_meta)
         os.makedirs(self.get_partial_derivatives_meta_folder(study_name))
         os.makedirs(phenotype_meta)
-
         # Copy the required data
         distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_individuals"), individuals_meta)
         distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_genotype"), actual_genotype_meta)
         distutils.dir_util.copy_tree(os.path.join(encoding_output, "encode_phenotype"), phenotype_meta)
         for file in glob.glob(os.path.join(partial_derivatives, "*.npy")):
             shutil.copy(file, self.get_partial_derivatives_meta_folder(study_name))
-
         distutils.dir_util.remove_tree(encoding_output)
         distutils.dir_util.remove_tree(partial_derivatives)
+
+    def per_cohort_encoding_step(self, encoding_output, hdf5_genotype_directory, phenotype_matrix, study_name):
+        hase.main(["-g", hdf5_genotype_directory,
+                   "-study_name", study_name,
+                   "-o", encoding_output,
+                   "-mapper", self.get_mapper_folder(study_name),
+                   "-ph", phenotype_matrix,
+                   "-mode", "encoding"])
 
     def prepare_mapper_meta_folder(self):
         meta_mapper = self.get_meta_mapper_folder()
@@ -133,8 +151,8 @@ class HaseExecutor:
                             ["-ref_name", self.ref_name],
                             ["-mapper_chunk", "30"],
                             ["-mode", "meta-classic"],
-                            ["-allow_missingness"]
-                            ]
+                            ["-allow_missingness"],
+                            ["-maf", "0.05"]]
 
         covariate_indices_path = self.get_covariate_indices_path()
         if covariate_indices_path:
@@ -175,3 +193,19 @@ class HaseExecutor:
 
     def set_covariate_indices_path(self, path):
         self._covariate_indices_path = path
+
+    def copy_per_cohort_analysis(self, other):
+        for cohort_name in self.study_names:
+            meta_folder = other.get_meta_folder(cohort_name)
+            if not os.path.exists(meta_folder):
+                shutil.copytree(
+                    self.get_meta_folder(cohort_name),
+                    meta_folder)
+
+    def copy_per_cohort_mapper_files(self, other):
+        for cohort_name in self.study_names:
+            mapper_folder = other.get_mapper_folder(cohort_name)
+            if not os.path.exists(mapper_folder):
+                shutil.copytree(
+                    self.get_mapper_folder(cohort_name),
+                    mapper_folder)

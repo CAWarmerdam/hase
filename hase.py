@@ -739,7 +739,7 @@ def main(argv=None):
 
         classic_meta_analyser = ClassicMetaAnalyser(
             meta_phen, meta_pard, intersecting_identifiers, row_index, args.study_name, args.out,
-            covariate_indices=covariate_indices)
+            covariate_indices=covariate_indices, maf_threshold=args.maf)
 
         # Start looping over all genotype chunks
         # We use while true, since implementing an iterator is apparently

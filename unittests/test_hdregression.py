@@ -279,123 +279,123 @@ class TestInteractionSupportingHase(unittest.TestCase):
         self.assertTrue(np.isclose(model_table.loc[a_inv.shape[1] - 1, u"t values"], t_stat[0, 0, 0]))
         print("Standard error and t-statistics equal between model and regular regression analysis")
 
-
-class TestMissingnessFunctions(unittest.TestCase):
-
-    def test_expand_sample_size_matrix(self):
-        # Define three cohorts, with 52, 23, and 81 samples respectively
-        sample_size = [52, 23, 81]
-
-        # We assume to have 8 variants available
-        # Every cohort has a different set of variants available (and missing)
-        variant_indices = [np.array([1, 3, 4, 6, -1, 9, 10, 12]),
-                           np.array([-1, -1, 3, 5, 6, 8, -1, 11]),
-                           np.array([1, 2, 3, 5, 7, -1, -1, 4])]
-
-        # Test if the returned sample sizes are equal to the expected sample sizes
-        observed_sample_sizes = expand_sample_size_matrix(sample_size, variant_indices)
-        expected_sample_sizes = np.array([133, 133, 156, 156, 104, 75, 52, 156])
-        self.assertTrue(np.array_equal(observed_sample_sizes, expected_sample_sizes))
-
-        # We assume to have 4 phenotypes now
-        # Every cohort has a different set of phenotypes available (and missing)
-        phenotype_indices = [np.array([1, 2, 3, -1]),
-                             np.array([1, 3, 4, 5]),
-                             np.array([-1, 2, 3, 4])]
-
-        # Test if the returned sample sizes are equal to the expected sample sizes
-        observed_sample_sizes = expand_sample_size_matrix(sample_size,
-                                                          variant_indices,
-                                                          phenotype_indices)
-
-        expected_sample_sizes = np.array(
-            [[52, 52, 75, 75, 23, 75, 52, 75],
-             [133, 133, 156, 156, 104, 75, 52, 156],
-             [133, 133, 156, 156, 104, 75, 52, 156],
-             [81, 81, 104, 104, 104, 23, 0, 104]]).T
-
-        self.assertTrue(np.array_equal(observed_sample_sizes, expected_sample_sizes))
-
-    def test_a_inverse_with_missingness(self):
-
-        variant_indices = [np.array([1, 3, 4, 6, -1, 9, 10, 12]),
-                           np.array([-1, -1, 3, 5, 6, 8, -1, 11]),
-                           np.array([1, 2, 3, 5, 7, -1, -1, 4])]
-
-        constant_a = [np.array([[52., 57.],
-                                [57., 127.]]),
-                      np.array([[23., 30.],
-                                [30., 68.]]),
-                      np.array([[81., 110.],
-                                [110., 256.]])]
-
-        variant_dependent_a = np.array([[[48., 50., 78.],
-                                         [58., 64., 98.],
-                                         [55., 61., 101.],
-                                         [49., 47., 75.],
-                                         [48., 52., 72.],
-                                         [52., 55., 88.],
-                                         [53., 70., 87.],
-                                         [52., 60., 86.]],
-                                        [[25., 41., 41.],
-                                         [27., 37., 49.],
-                                         [23., 25., 39.],
-                                         [27., 39., 47.],
-                                         [27., 32., 49.],
-                                         [26., 38., 44.],
-                                         [26., 39., 46.],
-                                         [24., 31., 40.]],
-                                        [[63., 82., 101.],
-                                         [70., 93., 118.],
-                                         [101., 137., 171.],
-                                         [80., 98., 134.],
-                                         [80., 111., 132.],
-                                         [80., 106., 132.],
-                                         [84., 123., 132.],
-                                         [90., 107., 158.]]])
-
-        variant_dependent_a[np.array(variant_indices) == -1] = 0
-        variant_dependent_a = variant_dependent_a.sum(axis=0)
-
-        a_inverse = a_inverse_extended_allow_missingness(variant_dependent_a=variant_dependent_a,
-                                                         constant_a=constant_a,
-                                                         variant_indices=variant_indices)
-
-        a_inverse_expected = np.array(
-            [[[0.0257807, -0.00768435, -0.01032025],
-              [-0.00768435, 0.00579112, 0.00049461],
-              [-0.01032025, 0.00049461, 0.01162156]],
-
-             [[0.02717178, -0.00747424, -0.01066913],
-              [-0.00747424, 0.00577504, 0.00023158],
-              [-0.01066913, 0.00023158, 0.01078375]],
-
-             [[0.02718515, -0.00641103, -0.01104979],
-              [-0.00641103, 0.00494715, 0.00014263],
-              [-0.01104979, 0.00014263, 0.009473]],
-
-             [[0.02608415, -0.00694555, -0.01090292],
-              [-0.00694555, 0.00498668, 0.00064827],
-              [-0.01090292, 0.00064827, 0.01008427]],
-
-             [[0.03821472, -0.01004418, -0.01465556],
-              [-0.01004418, 0.00737881, 0.00010806],
-              [-0.01465556, 0.00010806, 0.01410328]],
-
-             [[0.04766925, -0.01179808, -0.01985591],
-              [-0.01179808, 0.01064337, -0.00052715],
-              [-0.01985591, -0.00052715, 0.0196802]],
-
-             [[0.05953603, -0.0120931, -0.02653899],
-              [-0.0120931, 0.01660502, -0.0059933],
-              [-0.02653899, -0.0059933, 0.03248388]],
-
-             [[0.02640711, -0.00685729, -0.01065435],
-              [-0.00685729, 0.00497599, 0.00053896],
-              [-0.01065435, 0.00053896, 0.00937292]]])
-
-        self.assertTrue(np.allclose(a_inverse, a_inverse_expected))
-
+#
+# class TestMissingnessFunctions(unittest.TestCase):
+#
+#     def test_expand_sample_size_matrix(self):
+#         # Define three cohorts, with 52, 23, and 81 samples respectively
+#         sample_size = [52, 23, 81]
+#
+#         # We assume to have 8 variants available
+#         # Every cohort has a different set of variants available (and missing)
+#         variant_indices = [np.array([1, 3, 4, 6, -1, 9, 10, 12]),
+#                            np.array([-1, -1, 3, 5, 6, 8, -1, 11]),
+#                            np.array([1, 2, 3, 5, 7, -1, -1, 4])]
+#
+#         # Test if the returned sample sizes are equal to the expected sample sizes
+#         observed_sample_sizes = expand_sample_size_matrix(sample_size, variant_indices)
+#         expected_sample_sizes = np.array([133, 133, 156, 156, 104, 75, 52, 156])
+#         self.assertTrue(np.array_equal(observed_sample_sizes, expected_sample_sizes))
+#
+#         # We assume to have 4 phenotypes now
+#         # Every cohort has a different set of phenotypes available (and missing)
+#         phenotype_indices = [np.array([1, 2, 3, -1]),
+#                              np.array([1, 3, 4, 5]),
+#                              np.array([-1, 2, 3, 4])]
+#
+#         # Test if the returned sample sizes are equal to the expected sample sizes
+#         observed_sample_sizes = expand_sample_size_matrix(sample_size,
+#                                                           variant_indices,
+#                                                           phenotype_indices)
+#
+#         expected_sample_sizes = np.array(
+#             [[52, 52, 75, 75, 23, 75, 52, 75],
+#              [133, 133, 156, 156, 104, 75, 52, 156],
+#              [133, 133, 156, 156, 104, 75, 52, 156],
+#              [81, 81, 104, 104, 104, 23, 0, 104]]).T
+#
+#         self.assertTrue(np.array_equal(observed_sample_sizes, expected_sample_sizes))
+#
+#     def test_a_inverse_with_missingness(self):
+#
+#         variant_indices = [np.array([1, 3, 4, 6, -1, 9, 10, 12]),
+#                            np.array([-1, -1, 3, 5, 6, 8, -1, 11]),
+#                            np.array([1, 2, 3, 5, 7, -1, -1, 4])]
+#
+#         constant_a = [np.array([[52., 57.],
+#                                 [57., 127.]]),
+#                       np.array([[23., 30.],
+#                                 [30., 68.]]),
+#                       np.array([[81., 110.],
+#                                 [110., 256.]])]
+#
+#         variant_dependent_a = np.array([[[48., 50., 78.],
+#                                          [58., 64., 98.],
+#                                          [55., 61., 101.],
+#                                          [49., 47., 75.],
+#                                          [48., 52., 72.],
+#                                          [52., 55., 88.],
+#                                          [53., 70., 87.],
+#                                          [52., 60., 86.]],
+#                                         [[25., 41., 41.],
+#                                          [27., 37., 49.],
+#                                          [23., 25., 39.],
+#                                          [27., 39., 47.],
+#                                          [27., 32., 49.],
+#                                          [26., 38., 44.],
+#                                          [26., 39., 46.],
+#                                          [24., 31., 40.]],
+#                                         [[63., 82., 101.],
+#                                          [70., 93., 118.],
+#                                          [101., 137., 171.],
+#                                          [80., 98., 134.],
+#                                          [80., 111., 132.],
+#                                          [80., 106., 132.],
+#                                          [84., 123., 132.],
+#                                          [90., 107., 158.]]])
+#
+#         variant_dependent_a[np.array(variant_indices) == -1] = 0
+#         variant_dependent_a = variant_dependent_a.sum(axis=0)
+#
+#         a_inverse = a_inverse_extended_allow_missingness(variant_dependent_a=variant_dependent_a,
+#                                                          constant_a=constant_a,
+#                                                          variant_indices=variant_indices)
+#
+#         a_inverse_expected = np.array(
+#             [[[0.0257807, -0.00768435, -0.01032025],
+#               [-0.00768435, 0.00579112, 0.00049461],
+#               [-0.01032025, 0.00049461, 0.01162156]],
+#
+#              [[0.02717178, -0.00747424, -0.01066913],
+#               [-0.00747424, 0.00577504, 0.00023158],
+#               [-0.01066913, 0.00023158, 0.01078375]],
+#
+#              [[0.02718515, -0.00641103, -0.01104979],
+#               [-0.00641103, 0.00494715, 0.00014263],
+#               [-0.01104979, 0.00014263, 0.009473]],
+#
+#              [[0.02608415, -0.00694555, -0.01090292],
+#               [-0.00694555, 0.00498668, 0.00064827],
+#               [-0.01090292, 0.00064827, 0.01008427]],
+#
+#              [[0.03821472, -0.01004418, -0.01465556],
+#               [-0.01004418, 0.00737881, 0.00010806],
+#               [-0.01465556, 0.00010806, 0.01410328]],
+#
+#              [[0.04766925, -0.01179808, -0.01985591],
+#               [-0.01179808, 0.01064337, -0.00052715],
+#               [-0.01985591, -0.00052715, 0.0196802]],
+#
+#              [[0.05953603, -0.0120931, -0.02653899],
+#               [-0.0120931, 0.01660502, -0.0059933],
+#               [-0.02653899, -0.0059933, 0.03248388]],
+#
+#              [[0.02640711, -0.00685729, -0.01065435],
+#               [-0.00685729, 0.00497599, 0.00053896],
+#               [-0.01065435, 0.00053896, 0.00937292]]])
+#
+#         self.assertTrue(np.allclose(a_inverse, a_inverse_expected))
+#
 
 class TestPermutationStrategies(unittest.TestCase):
     number_of_individuals = 81
@@ -558,6 +558,72 @@ def test_hase2_no_interaction(number_of_individuals,
     assert(np.isclose(model_table.loc[a_inverse_alternative.shape[1] - 1, u"t values"], t_stat[0, 0, 0]))
     print("Standard error and t-statistics equal between model and regular regression analysis")
 
+class TestSlicingB4(unittest.TestCase):
+    number_of_individuals = 81
+    number_of_variants = 10000
+
+    def test_b4_slicing(self):
+
+        genotype_matrix = get_genotype_matrix(self.number_of_individuals,
+                                              self.number_of_variants)
+        covariates_matrix = get_covariates_matrix(self.number_of_individuals, 1) # One covariate
+        covariates_matrix_extended = covariates_matrix.repeat(self.number_of_variants, axis=1)
+        base_x = np.stack((covariates_matrix_extended, genotype_matrix.T), axis=1)
+        matrix_with_determinants_x = get_x_no_interaction(base_x)
+
+        phenotype_matrix = get_phenotype_matrix_no_interaction(matrix_with_determinants_x)[:, 0:5]
+
+        # Encode the data
+        encoder = EncoderCopy(self.number_of_individuals)
+        genotype_matrix_encoded = encoder.encode_genotype_matrix(genotype_matrix)
+        phenotype_matrix_encoded = encoder.encode_with_inverse(phenotype_matrix)
+
+        # Calculate the A inverse the new way
+        a_inverse_alternative = calculate_a_alternative(covariates_matrix, genotype_matrix)
+
+        # Calculate the A inverse the old way
+        a_inverse = calculate_a(covariates_matrix, genotype_matrix)
+
+        b_cov = B_covariates(covariates_matrix, phenotype_matrix)
+
+        C = C_matrix(phenotype_matrix)
+
+        b4_actual = B4(phenotype_matrix_encoded, genotype_matrix_encoded)
+        b4_expected = B4(phenotype_matrix, genotype_matrix)
+        b4_expected_1b = B4(encoder.encode_with_inverse(phenotype_matrix),
+                           encoder.encode_genotype_matrix(genotype_matrix))
+
+        self.assertTrue(np.allclose(b4_expected, b4_actual))
+        self.assertTrue(np.allclose(b4_expected_1b, b4_actual))
+
+        mask = np.ones(self.number_of_individuals, bool)
+        mask[44] = False
+
+        encoder_80 = EncoderCopy(self.number_of_individuals-1)
+
+        b4_expected_2 = B4(phenotype_matrix[mask, :],
+                           genotype_matrix[:, mask])
+        b4_actual_2 = B4(encoder_80.encode_with_inverse(phenotype_matrix[mask, :]),
+                         encoder_80.encode_genotype_matrix(genotype_matrix[:, mask]))
+
+        self.assertTrue(np.allclose(b4_expected_2, b4_actual_2))
+
+        for i in range(self.number_of_individuals):
+            mask_for_expected = np.ones(self.number_of_individuals, bool)
+            mask_for_expected[i] = False
+            b4_expected = B4(encoder_80.encode_with_inverse(phenotype_matrix[mask_for_expected, :]),
+                             encoder_80.encode_genotype_matrix(genotype_matrix[:, mask_for_expected]))
+
+            print(i)
+
+            for i2 in range(self.number_of_individuals):
+                mask_for_actual = np.ones(self.number_of_individuals, bool)
+                mask_for_actual[i2] = False
+                b4_actual = B4(phenotype_matrix_encoded[mask_for_actual, :],
+                               genotype_matrix_encoded[:, mask_for_actual])
+
+                self.assertFalse(np.allclose(b4_expected, b4_actual))
+
 
 def get_a_parts_alternative(covariates_matrix, genotype_matrix):
     # Get empty matrix of covariate values
@@ -668,9 +734,10 @@ def main(argv=None):
     number_of_individuals = 8
     number_of_variants = 3
 
-    test_hase2_no_interaction(number_of_individuals, number_of_variants)
+    #test_hase2_no_interaction(number_of_individuals, number_of_variants)
 
-    test_hase2_with_interaction(number_of_individuals, number_of_variants)
+    #test_hase2_with_interaction(number_of_individuals, number_of_variants)
+    test_b4_slicing(number_of_individuals = 20, number_of_variants = 10)
     return 0
 
 

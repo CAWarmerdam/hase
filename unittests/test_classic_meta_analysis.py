@@ -43,7 +43,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         to 10 to 20 or so to make sure chunking works as expected
 
         """
-        #self.test_dir = tempfile.mkdtemp()
+        # self.test_dir = tempfile.mkdtemp()
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
         self.dataset = "freqdataset"
@@ -60,10 +60,8 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         self.hase_executor.meta_analyse(self.data_dir)
 
-
     def tearDown(self):
-            pass
-
+        pass
 
     def test_mapperGetNonMissing(self):
         """
@@ -104,8 +102,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         self.assertTrue(np.array_equal(
             actual_genotypes,
-            expected_genotypes.loc[actual_keys,:].values))
-
+            expected_genotypes.loc[actual_keys, :].values))
 
     def test_mapperGetMissingness(self):
         """
@@ -152,7 +149,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         self.assertTrue(np.array_equal(
             actual_genotypes,
-            expected_genotypes.loc[actual_keys,:].values))
+            expected_genotypes.loc[actual_keys, :].values))
 
     def test_CohortAnalyser(self):
         study_name = "test_2"
@@ -165,9 +162,17 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         phenotypes_path = os.path.join(self.data_dir, study_name, "phenotypes", study_name + ".txt")
         phenotypes = pd.read_csv(phenotypes_path, delimiter="\t", index_col='id')
 
+        number_of_participants = float(genotypes.values.shape[1])
+        freq_aa = np.count_nonzero(genotypes.values == 0., axis=1) / number_of_participants
+        freq_ab = np.count_nonzero(genotypes.values == 1., axis=1) / number_of_participants
+        freq_bb = np.count_nonzero(genotypes.values == 2., axis=1) / number_of_participants
+        freq_a = freq_aa + freq_ab * 0.5
+        freq_b = freq_bb + freq_ab * 0.5
+        maf_filter = np.logical_and(freq_a >= 0.05, freq_b >= 0.05)
+
         expected_b4_data_frame = pd.DataFrame(
-            hdregression.B4(phenotypes.values, genotypes.values),
-            columns=phenotypes.columns, index=genotypes.index)
+            hdregression.B4(phenotypes.values, genotypes.values[maf_filter, :]),
+            columns=phenotypes.columns, index=genotypes.index[maf_filter])
 
         expected_results = pd.read_csv(
             os.path.join(self.data_dir, study_name, "results.txt"),
@@ -186,10 +191,10 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         partial_derivatives_folders = []
 
         for i, j in enumerate(self.hase_executor.run_func_all_studies(
-                    self.hase_executor.get_partial_derivatives_meta_folder)):
-                partial_derivatives_folders.append(Reader('partial'))
-                partial_derivatives_folders[i].start(j, study_name=self.hase_executor.study_names[i])
-                partial_derivatives_folders[i].folder.load()
+                self.hase_executor.get_partial_derivatives_meta_folder)):
+            partial_derivatives_folders.append(Reader('partial'))
+            partial_derivatives_folders[i].start(j, study_name=self.hase_executor.study_names[i])
+            partial_derivatives_folders[i].folder.load()
 
         meta_pard = MetaParData(partial_derivatives_folders, self.hase_executor.study_names,
                                 protocol=None,
@@ -202,11 +207,11 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             phen[i].start(j)
 
         meta_phen = MetaPhenotype(phen,
-            include=None, exclude=None, allow_missingness=allow_missingness)
+                                  include=None, exclude=None, allow_missingness=allow_missingness)
 
         gen = []
         for i, j in enumerate(self.hase_executor.run_func_all_studies(
-                    self.hase_executor.get_meta_genotype_folder)):
+                self.hase_executor.get_meta_genotype_folder)):
             gen.append(Reader('genotype'))
             gen[i].start(j, hdf5=True, study_name=self.hase_executor.study_names[i], ID=False)
 
@@ -273,7 +278,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         phenotype, phenotype_names = meta_phen.get()
 
         self.assertTrue(np.array_equal(
-            expected_phenotypes.loc[:,phenotype_names].values,
+            expected_phenotypes.loc[:, phenotype_names].values,
             phenotype))
 
     def setup_meta_phen(self):

@@ -180,16 +180,33 @@ class ClassicMetaAnalyser:
         meta_analysed_effect_sizes = effect_size_divided_by_variance_total / one_divided_by_variance_total
         meta_analysed_standard_error = np.sqrt(1 / one_divided_by_variance_total)
 
-        # TODO: Calculate i-squared values from each of the cohort's Z-scores
+        # We need to quantify heterogeneity. We do this by calculating I2 values.
+        effect_size_deviations_from_mean = np.power(
+            effect_sizes - meta_analysed_effect_sizes, 2)
+
+        # Weight and sum all effect size deviations from the mean.
+        effect_size_deviations = np.nansum(
+            one_divided_by_variance * effect_size_deviations_from_mean,
+            axis=0)
+
+        # Expected effect size deviations from the mean
+        expected_effect_size_deviations = len(self.cohort_list) - 1
+        i_squared = (
+            ((effect_size_deviations
+              - expected_effect_size_deviations)
+             / effect_size_deviations
+             ) * 100)
 
         meta_analysis_sample_sizes = self.get_sample_sizes()
 
         self.set_results(meta_analysed_effect_sizes,
                          meta_analysed_standard_error,
                          meta_analysis_sample_sizes,
+                         i_squared,
                          phenotype_names, variant_names)
 
-    def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error, meta_analysis_sample_sizes,
+    def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error,
+                    meta_analysis_sample_sizes, i_squared,
                     phenotype_names, variant_names):
 
         self.results = pd.DataFrame({
@@ -197,6 +214,7 @@ class ClassicMetaAnalyser:
             "phenotype": np.tile(phenotype_names, meta_analysed_effect_sizes.shape[0]),
             "beta": meta_analysed_effect_sizes.flatten(),
             "standard_error": meta_analysed_standard_error.flatten(),
+            "i_squared": i_squared.flatten(),
             "sample_size": meta_analysis_sample_sizes.flatten()})
 
     def save_results(self, chunk=None, node=None):
@@ -369,8 +387,8 @@ class CohortAnalyser:
         threshold = self.get_maf_threshold()
         variant_filter = [True] * self.analyser.maf.shape[0]
         if threshold != 0:
-            variant_filter = (self.analyser.maf > threshold) \
-                             & (self.analyser.maf < 1 - threshold) \
+            variant_filter = (self.analyser.maf >= threshold) \
+                             & (self.analyser.maf <= (1 - threshold)) \
                              & (self.analyser.maf != 0.5)
             # This probably handles the large a_test matrices as well.
         return variant_filter

@@ -156,6 +156,19 @@ class ClassicMetaAnalyser:
         effect_sizes = self.get_effect_sizes()
         standard_error = self.get_standard_error()
         # Missing values are expected to be NaN
+        # We should check which phenotype, variant combinations are NaN in all
+        # cohorts. Then we can remove these from the variant and phenotype names
+        not_all_nan = ~np.all(np.isnan(effect_sizes), axis=0)
+        effect_sizes = effect_sizes[:, not_all_nan]
+        standard_error = standard_error[:, not_all_nan]
+
+        # Now create the cartesian product of all variant, phenotype names
+        test_combinations = np.vstack(
+            (np.repeat(variant_names, phenotype_names.shape[0]),
+             np.tile(phenotype_names, variant_names.shape[0]))).T
+
+        # From these combinations we can remove all that are nan in all cohorts
+        test_combinations = test_combinations[not_all_nan.flatten()]
 
         # The inverse variance weighted meta-analysis requires calculating
         # the variance of the effect estimate. We do this by calculating the
@@ -197,25 +210,25 @@ class ClassicMetaAnalyser:
              / effect_size_deviations
              ) * 100)
 
-        meta_analysis_sample_sizes = self.get_sample_sizes()
+        meta_analysis_sample_sizes = self.get_sample_sizes()[not_all_nan]
 
         self.set_results(meta_analysed_effect_sizes,
                          meta_analysed_standard_error,
                          meta_analysis_sample_sizes,
                          i_squared,
-                         phenotype_names, variant_names)
+                         test_combinations)
 
     def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error,
                     meta_analysis_sample_sizes, i_squared,
-                    phenotype_names, variant_names):
+                    test_combinations):
 
         self.results = pd.DataFrame({
-            "variant": np.repeat(variant_names, meta_analysed_effect_sizes.shape[1]),
-            "phenotype": np.tile(phenotype_names, meta_analysed_effect_sizes.shape[0]),
-            "beta": meta_analysed_effect_sizes.flatten(),
-            "standard_error": meta_analysed_standard_error.flatten(),
-            "i_squared": i_squared.flatten(),
-            "sample_size": meta_analysis_sample_sizes.flatten()})
+            "variant": test_combinations[:, 0],
+            "phenotype": test_combinations[:, 1],
+            "beta": meta_analysed_effect_sizes,
+            "standard_error": meta_analysed_standard_error,
+            "i_squared": i_squared,
+            "sample_size": meta_analysis_sample_sizes})
 
     def save_results(self, chunk=None, node=None):
 
@@ -255,7 +268,8 @@ class ClassicMetaAnalyser:
         variants are located.
         :return: matrix of effect sizes [assoc, studies]
         """
-        return np.stack([cohort.analyser.get_betas() for cohort in self.cohort_list])
+        betas = np.stack([cohort.analyser.get_betas() for cohort in self.cohort_list])
+        return betas
 
     def get_standard_error(self):
         """
@@ -265,7 +279,8 @@ class ClassicMetaAnalyser:
         :param association_indices: A list with for each study an array of variant indices, indicating at what position
         variants are located
         """
-        return np.stack([cohort.analyser.standard_error for cohort in self.cohort_list])
+        standard_errors = np.stack([cohort.analyser.standard_error for cohort in self.cohort_list])
+        return standard_errors
 
     def get_sample_sizes(self):
         return np.nansum(np.stack([cohort.get_sample_sizes() for cohort in self.cohort_list]), axis=0)

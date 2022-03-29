@@ -5,10 +5,9 @@ Test script for the classic meta analysis
 """
 import glob
 import os
-import tempfile
 import unittest
-import numpy as np
 
+import numpy as np
 # TODO: implement test for missingness in phenotype thingy
 # TODO: implement test for missingness in genotype thingy (new getter)
 import pandas as pd
@@ -17,7 +16,6 @@ from hase import load_mapper
 from hdgwas import hdregression, meta_classic
 from hdgwas.data import Reader, MetaPhenotype, MetaParData
 from hdgwas.tools import merge_genotype, get_intersecting_individual_indices
-from unittests.test_hdregression import get_single_study_data
 from unittests.utils.hase_executor import HaseExecutor
 
 
@@ -208,6 +206,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         meta_phen = MetaPhenotype(phen,
                                   include=None, exclude=None, allow_missingness=allow_missingness)
+        meta_phen.chunk_size = 10
 
         gen = []
         for i, j in enumerate(self.hase_executor.run_func_all_studies(
@@ -236,26 +235,30 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         classic_meta_analyser.prepare_cohorts(
             variant_indices, keys)
 
-        phenotype, phenotype_names = classic_meta_analyser.meta_phen.get()
-        phenotype_indices = classic_meta_analyser.meta_phen.get_phenotype_indices(phenotype_names)
+        for phenotype, phenotype_names, phenotype_indices in classic_meta_analyser.meta_phen:
 
-        cohort = classic_meta_analyser.cohort_list[study_index]
-        cohort.set_phenotype_names(phenotype_names)
-        cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
-        actual_b4_data_frame = pd.DataFrame(
-            cohort.calculate_b4_matrix(genotype, phenotype),
-            columns=cohort.get_phenotype_names(phenotype_names),
-            index=cohort.get_variant_names(keys))
+            cohort = classic_meta_analyser.cohort_list[study_index]
+            cohort.set_phenotype_names(phenotype_names)
+            cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
+            actual_b4_data_frame = pd.DataFrame(
+                cohort.calculate_b4_matrix(genotype, phenotype),
+                columns=cohort.get_phenotype_names(phenotype_names),
+                index=cohort.get_variant_names(keys))
 
-        self.compare_actual_matrix_to_expected(actual_b4_data_frame, expected_b4_data_frame)
+            required_phenotype_names = phenotype_names[
+                np.isin(phenotype_names, expected_b4_data_frame.columns.values)]
 
-        cohort.analyse(genotype, phenotype)
-        actual_betas = pd.DataFrame(
-            cohort.get_betas(),
-            columns=cohort.get_phenotype_names(phenotype_names),
-            index=cohort.get_variant_names(keys))
+            self.compare_actual_matrix_to_expected(
+                actual_b4_data_frame, expected_b4_data_frame[required_phenotype_names])
 
-        self.compare_actual_matrix_to_expected(actual_betas, expected_betas)
+            cohort.analyse(genotype, phenotype)
+            actual_betas = pd.DataFrame(
+                cohort.get_betas(),
+                columns=cohort.get_phenotype_names(phenotype_names),
+                index=cohort.get_variant_names(keys))
+
+            self.compare_actual_matrix_to_expected(
+                actual_betas, expected_betas[required_phenotype_names])
 
     def compare_actual_matrix_to_expected(self, actual_data_frame, expected_data_frame):
         self.assertTrue(np.all(np.isin(

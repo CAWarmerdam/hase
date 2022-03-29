@@ -493,7 +493,7 @@ class MetaPhenotype(object):
         # We want to adjust the
 
         for study_index in self.keys:
-            chunked_order[study_index] = self.order[study_index][np.where(self.phen_names == phenotype_names)]
+            chunked_order[study_index] = self.order[study_index][np.where(np.in1d(self.phen_names, phenotype_names))[0]]
 
         return chunked_order
 
@@ -526,6 +526,32 @@ class MetaPhenotype(object):
                 a = b
 
         return phenotype, self.phen_names[start:finish]
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        # Get the next phenotype chunk.
+        with Timer() as t_ph:
+            # Phen names is the
+            phenotype, phenotype_names = self.get()
+            phenotype_indices = self.get_phenotype_indices(phenotype_names)
+        print("Time to get PH {}s".format(t_ph.secs))
+
+        # If the phenotype type is None, the loop is done...
+        if isinstance(phenotype, type(None)):
+            # Reset the processed phenotypes when the loop is done.
+            # With the next chunk of SNPs we need to do these again
+            self.processed = 0
+            # The encoded interactions are also processed at the
+            # same rate as the phenotypes.
+            # Reset the number of processed values for this as well.
+            print('All phenotypes processed!')
+            raise StopIteration
+        print("Merged phenotype shape {}".format(phenotype.shape))
+
+        return phenotype, phenotype_names, phenotype_indices
+
 
 
 class MetaParData(object):

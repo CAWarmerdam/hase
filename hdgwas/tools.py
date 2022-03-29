@@ -416,11 +416,8 @@ class Mapper(object):
                     self.chunk_pool.append([self.chunk_pool[-1][1], self.n_keys])
             self.chunk_pool = self.chunk_pool[::-1]
 
-            print self.chunk_pool
-
         if len(self.chunk_pool) != 0:
             ch = self.chunk_pool.pop()
-            print ch
             return ch
         else:
             return None

@@ -749,11 +749,12 @@ def main(argv=None):
             if mapper.cluster == 'n':
                 variant_indices, keys = mapper.get(
                     allow_missingness=args.allow_missingness)
-            else:
+            elif mapper.cluster == 'y':
                 ch = mapper.chunk_pop()
                 if ch is None:
                     break
-                variant_indices, keys = mapper.get(chunk_number=ch, allow_missingness=args.allow_missingness)
+                variant_indices, keys = mapper.get(
+                    chunk_number=ch, allow_missingness=args.allow_missingness)
 
             if isinstance(variant_indices, type(None)):
                 break
@@ -874,7 +875,7 @@ def load_mapper(mapper_chunk_size, study_name, ref_name,
         print mapper.include.head()
         if 'ID' not in mapper.include.columns and (
                 'CHR' not in mapper.include.columns or 'bp' not in mapper.include.columns):
-            raise ValueError('{} table does not have ID or CHR,bp columns'.format(args.snp_id_inc))
+            raise ValueError('{} table does not have ID or CHR,bp columns'.format(snp_id_inc))
     if snp_id_exc is not None:  # If this is not None the argument contains a table of snps to exclude
         mapper.exclude = pd.DataFrame.from_csv(snp_id_exc, index_col=None)
         print 'Exclude:'

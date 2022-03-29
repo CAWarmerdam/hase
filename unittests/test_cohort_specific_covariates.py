@@ -2,18 +2,11 @@
 
 import glob
 import os
-import tempfile
 import unittest
-import numpy as np
 
+import numpy as np
 import pandas as pd
 
-from hase import load_mapper
-from hdgwas import hdregression, meta_classic
-from hdgwas.data import Reader, MetaPhenotype, MetaParData
-from hdgwas.tools import merge_genotype, get_intersecting_individual_indices
-from unittests.test_classic_meta_analysis import load_expected_variant_indices
-from unittests.test_hdregression import get_single_study_data
 from unittests.utils.hase_executor import HaseExecutor
 
 

@@ -12,6 +12,8 @@ from tools import mapper
 class HaseExecutor:
     def __init__(self, working_dir, project_root, study_names):
 
+        self.nodes_n = None
+        self.node_i = None
         self._covariate_indices_path = None
         self.study_names = study_names
         self.project_root = project_root
@@ -152,13 +154,18 @@ class HaseExecutor:
                             ["-mapper_chunk", "30"],
                             ["-mode", "meta-classic"],
                             ["-allow_missingness"],
+                            ["-th", "0"],
                             ["-maf", "0.05"]]
 
         covariate_indices_path = self.get_covariate_indices_path()
         if covariate_indices_path:
             command_of_lists.append(["--covariate-indices", covariate_indices_path])
 
-        argv = [arg for sub_arg in command_of_lists for arg in sub_arg]
+        if self.nodes_n is not None and self.node_i is not None:
+            command_of_lists.append(
+                ["-node", self.nodes_n, self.node_i, "-cluster", "y"])
+
+        argv = [str(arg) for sub_arg in command_of_lists for arg in sub_arg]
 
         hase.main(argv)
 

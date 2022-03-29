@@ -80,25 +80,7 @@ class ClassicMetaAnalyser:
 
         self.prepare_cohorts(variant_indices, variant_names)
 
-        while True:
-            # Get the next phenotype chunk.
-            with Timer() as t_ph:
-                # Phen names is the
-                phenotype, phenotype_names = self.meta_phen.get()
-                phenotype_indices = self.meta_phen.get_phenotype_indices(phenotype_names)
-            print("Time to get PH {}s".format(t_ph.secs))
-
-            # If the phenotype type is None, the loop is done...
-            if isinstance(phenotype, type(None)):
-                # Reset the processed phenotypes when the loop is done.
-                # With the next chunk of SNPs we need to do these again
-                self.meta_phen.processed = 0
-                # The encoded interactions are also processed at the
-                # same rate as the phenotypes.
-                # Reset the number of processed values for this as well.
-                print('All phenotypes processed!')
-                break
-            print("Merged phenotype shape {}".format(phenotype.shape))
+        for phenotype, phenotype_names, phenotype_indices in self.meta_phen:
 
             for cohort in self.cohort_list:
                 # Now we need to do the analysis with the selected
@@ -496,7 +478,8 @@ class CohortAnalyser:
         else:
             print('There are {} common ids in phenotype files and PD data!'.format(
                 len(phenotype_names)))
-        return phenotype_filter
+        return np.array([self.partial_derivatives_phenotype_index[name]
+                         for name in phenotype_names])
 
     def analyse(self, genotype, phenotype):
 

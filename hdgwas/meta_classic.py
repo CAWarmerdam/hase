@@ -186,11 +186,12 @@ class ClassicMetaAnalyser:
 
         # Expected effect size deviations from the mean
         expected_effect_size_deviations = len(self.cohort_list) - 1
-        i_squared = (
-            ((effect_size_deviations
-              - expected_effect_size_deviations)
-             / effect_size_deviations
-             ) * 100)
+        with np.errstate(divide='ignore'):
+            i_squared = (
+                ((effect_size_deviations
+                  - expected_effect_size_deviations)
+                 / effect_size_deviations
+                 ) * 100)
 
         meta_analysis_sample_sizes = self.get_sample_sizes()[not_all_nan]
 

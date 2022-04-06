@@ -206,7 +206,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         meta_phen = MetaPhenotype(phen,
                                   include=None, exclude=None, allow_missingness=allow_missingness)
-        meta_phen.chunk_size = 10
+        meta_phen.chunk_size = 5
 
         gen = []
         for i, j in enumerate(self.hase_executor.run_func_all_studies(

@@ -443,7 +443,7 @@ class MetaPhenotype(object):
             self.order, self.phen_names = _check(self.mapper, self.keys, index=self.keep_index,
                                                  allow_missingness=allow_missingness)
             self.n_phenotypes = len(self.order[self.keys[0]])
-            print ('Loaded {} common phenotypes for meta-analysis'.format(self.n_phenotypes))
+            print ('Loaded {} phenotypes for meta-analysis'.format(self.n_phenotypes))
             self.processed = 0
         else:
             if not protocol.enable:

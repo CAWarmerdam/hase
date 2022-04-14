@@ -160,7 +160,7 @@ def main(argv=None):
             if args.node[1] > args.node[0]:
                 raise ValueError('Node # {} > {} total number of nodes'.format(args.node[1], args.node[0]))
 
-    if not os.path.isdir(args.out):
+    if not os.path.exists(args.out):
         print "Creating output folder {}".format(args.out)
         os.mkdir(args.out)
 

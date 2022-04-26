@@ -287,7 +287,7 @@ class TestDataGenerator:
         for cohort_name, data in genotype_data.items():
             HaseHDF5Writer(
                 path=os.path.join(self.base_output_path, cohort_name, "genotypes_hdf5"),
-                chunk_size=30,
+                chunk_size=128,
                 study_name=cohort_name) \
                 .write_genotype_matrix(genotype_data=data)
 
@@ -519,7 +519,8 @@ class TestDataGenerator:
 
 def generate_dataset_with_missingness(
         variants_data_frame,
-        number_of_phenotypes, number_of_covariates, base_output_path):
+        number_of_phenotypes,
+        number_of_covariates, base_output_path, fit_models=True):
     # We want to assign variant names so that genotype data can be properly written.
     test_data_generator = TestDataGenerator(
         variants_data_frame,
@@ -534,9 +535,10 @@ def generate_dataset_with_missingness(
     test_data_generator.write_genotype_data(variant_indices)
     test_data_generator.write_phenotype_data(phenotype_indices)
     test_data_generator.write_covariate_data()
-    test_data_generator.write_expected_meta_analysis(
-        variant_indices, phenotype_indices
-    )
+    if fit_models:
+        test_data_generator.write_expected_meta_analysis(
+            variant_indices, phenotype_indices
+        )
 
     variant_indices.to_csv(os.path.join(base_output_path, "variant_indices.txt"),
                            sep="\t", index=True, index_label="cohort",
@@ -610,10 +612,11 @@ def main(argv=None):
         argv = sys.argv
 
     generate_dataset_with_missingness(
-        variants_data_frame=sample_variants_from_ref(DEFAULT_NUMBER_OF_VARIANTS),
-        number_of_phenotypes=DEFAULT_NUMBER_OF_PHENOTYPES,
-        number_of_covariates=DEFAULT_NUMBER_OF_COVARIATES,
-        base_output_path="../resources/freqdataset/",
+        variants_data_frame=sample_variants_from_ref(10000),
+        number_of_phenotypes=1000,
+        number_of_covariates=100,
+        base_output_path="../resources/largedataset/",
+        fit_models=False
         )
     #
     # generate_covariate_subsetting_dataset(

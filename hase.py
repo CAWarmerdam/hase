@@ -1,6 +1,8 @@
 import sys
 import os
 import numpy as np
+from memory_profiler import profile
+
 from config import MAPPER_CHUNK_SIZE, basedir, CONVERTER_SPLIT_SIZE, PYTHON_PATH
 from hdgwas.meta_classic import CohortAnalyser
 from hdgwas.meta_classic import ClassicMetaAnalyser
@@ -35,7 +37,6 @@ HEAD += "* (C) 2015-2017 Gennady Roshchupkin and Hieab Adams\n"
 HEAD += "* Erasmus MC, Rotterdam /  Department of Medical Informatics, Radiology and Epidemiology \n"
 HEAD += "* GNU General Public License v3\n"
 HEAD += "*********************************************************************\n"
-
 
 def main(argv=None):
     if argv is None:
@@ -162,7 +163,7 @@ def main(argv=None):
 
     if not os.path.exists(args.out):
         print "Creating output folder {}".format(args.out)
-        os.mkdir(args.out)
+        os.makedirs(args.out)
 
     if args.np:
         check_np()
@@ -738,14 +739,22 @@ def main(argv=None):
                 covariate_indices[key] = np.array(indices).astype(int)
 
         classic_meta_analyser = ClassicMetaAnalyser(
-            meta_phen, meta_pard, intersecting_identifiers, row_index, args.study_name, args.out,
-            covariate_indices=covariate_indices, maf_threshold=args.maf)
+            meta_phen, meta_pard, intersecting_identifiers, row_index,
+            args.study_name, args.out,
+            covariate_indices=covariate_indices, maf_threshold=args.maf,
+            t_statistic_threshold=args.thr)
 
         # Start looping over all genotype chunks
         # We use while true, since implementing an iterator is apparently
         # too much work...
         while True:
+            # We start with an empty chunk...
             ch = None
+
+            # Then we check whether or not we are working in an environment
+            # wherein analysis is split over multiple nodes.
+
+            # This determines how the current chunk should be obtained.
             if mapper.cluster == 'n':
                 variant_indices, keys = mapper.get(
                     allow_missingness=args.allow_missingness)
@@ -756,22 +765,23 @@ def main(argv=None):
                 variant_indices, keys = mapper.get(
                     chunk_number=ch, allow_missingness=args.allow_missingness)
 
+            # Now we can check if we have looped through all genotype chunks...
             if isinstance(variant_indices, type(None)):
                 break
 
+            # And we can get the genotypes for this chunk...
             if is_no_b4_present_in_partial_derivatives:
                 with Timer() as t_g:
                     genotype = merge_genotype(gen, variant_indices, mapper)
                 print "Time to get G {}s".format(t_g.secs)
 
+            # Now analyse the genotype chunk
+            if mapper.cluster == 'y':
+                classic_meta_analyser.analyse_genotype_chunk(
+                    genotype, keys, variant_indices,
+                    chunk=ch, node=mapper.node[1])
             classic_meta_analyser.analyse_genotype_chunk(
                 genotype, keys, variant_indices)
-            if ch is not None:
-                classic_meta_analyser.save_results(chunk=ch,
-                                                   node=mapper.node[1])
-            else:
-                classic_meta_analyser.save_results()
-
 
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################

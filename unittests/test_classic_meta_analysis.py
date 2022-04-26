@@ -11,6 +11,7 @@ import numpy as np
 # TODO: implement test for missingness in phenotype thingy
 # TODO: implement test for missingness in genotype thingy (new getter)
 import pandas as pd
+import pyarrow.parquet as pq
 
 from hase import load_mapper
 from hdgwas import hdregression, meta_classic
@@ -226,7 +227,8 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         classic_meta_analyser = meta_classic.ClassicMetaAnalyser(
             meta_phen, meta_pard, intersecting_identifiers,
             row_index, self.hase_executor.study_names,
-            self.hase_executor.results_directory, maf_threshold=0.05)
+            self.hase_executor.results_directory, maf_threshold=0.05,
+            t_statistic_threshold=0)
 
         variant_indices, keys = mapper.get(
             allow_missingness=allow_missingness)
@@ -316,15 +318,22 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                 delimiter="\t"))
 
         # Load actual results
-        file_names = glob.glob(os.path.join(self.hase_executor.results_directory, "*.pkl"))
-        actual_results = pd.concat([pd.read_pickle(f) for f in file_names])
+        file_names_pkl = glob.glob(os.path.join(self.hase_executor.results_directory, "*.pkl"))
+        file_names_parquet = glob.glob(os.path.join(self.hase_executor.results_directory, "*.parquet"))
+
+        if len(file_names_parquet) > 0:
+            actual_results = pd.concat([pq.read_table(f).to_pandas() for f in file_names_parquet])
+        elif len(file_names_pkl) > 0:
+            actual_results = pd.concat([pd.read_pickle(f) for f in file_names_pkl])
+        else:
+            self.fail("No output present")
         expected_results = pd.read_csv(
             os.path.join(self.data_dir, "meta.txt"), delimiter='\t')
         print(actual_results)
 
         merged = pd.merge(
             actual_results, expected_results,
-            how="inner", on=["variant", "phenotype"],
+            how="outer", on=["variant", "phenotype"],
             suffixes=('_actual', '_expected'))
 
         merged["beta_isclose"] = np.isclose(

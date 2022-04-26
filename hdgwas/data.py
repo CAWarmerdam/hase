@@ -1084,7 +1084,7 @@ class CSVFolder(Folder):
 
             self._data = Data()
             self._data.chunk_size = 1000
-            self._data._data = df[df.columns[1:]].as_matrix()
+            self._data._data = df[df.columns[1:]].values
             self._data.id = np.array(df[df.columns[0]])
             if self._id is None:
                 self._id = self._data.id

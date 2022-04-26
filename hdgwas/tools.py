@@ -745,8 +745,6 @@ class Mapper(object):
         else:
             self.include_ind = np.arange(len(self.values))
 
-        all_indices_for_values_with_all_studies_available = None
-
         if allow_missingness:
             # Get the indices for those values that are present in ANY studies
             # Values that are greater than -1 are present

@@ -1,16 +1,16 @@
 from __future__ import print_function
-import gc
-import sys
+
 import os
-import warnings
 
 import numpy as np
 import pandas as pd
-from hdgwas.tools import Timer, Checker, study_indexes, Mapper, HaseAnalyser, merge_genotype, Reference, timing, \
-    check_np, check_converter, get_intersecting_individual_indices, select_identifiers
-from hdgwas.hdregression import HASE, A_covariates, A_tests, B_covariates, C_matrix, A_inverse, B4, \
-    get_a_inverse_extended, hase_supporting_interactions, expand_sample_size_matrix, \
-    a_inverse_extended_allow_missingness
+import pyarrow as pa
+import pyarrow.parquet as pq
+from memory_profiler import profile
+
+from hdgwas.hdregression import B4, \
+    get_a_inverse_extended, hase_supporting_interactions, HASE
+from hdgwas.tools import Timer, HaseAnalyser, select_identifiers
 
 
 class HaseException(Exception):
@@ -18,14 +18,10 @@ class HaseException(Exception):
 
 
 class ClassicMetaAnalyser:
-    def __init__(
-            self,
-            meta_phen, meta_pard,
-            sample_intersection, sample_indices, study_names,
-            out,
-            covariate_indices=None,
-            maf_threshold=0.0):
+    def __init__(self, meta_phen, meta_pard, sample_intersection, sample_indices, study_names, out,
+                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None):
 
+        self.t_statistic_threshold = t_statistic_threshold
         self.meta_pard = meta_pard
         self.meta_phen = meta_phen
         self.out = out
@@ -33,7 +29,7 @@ class ClassicMetaAnalyser:
             meta_pard, sample_intersection, sample_indices,
             study_names, covariate_indices=covariate_indices,
             maf_threshold=maf_threshold)
-        self.output_type = "pkl"
+        self.output_type = "parquet"
         self.results = None
         self.results_index = 0
 
@@ -76,7 +72,8 @@ class ClassicMetaAnalyser:
             cohort_list.append(cohort)
         return cohort_list
 
-    def analyse_genotype_chunk(self, genotype, variant_names, variant_indices):
+    def analyse_genotype_chunk(self, genotype, variant_names, variant_indices,
+                               chunk=None, node=None):
 
         self.prepare_cohorts(variant_indices, variant_names)
 
@@ -91,6 +88,8 @@ class ClassicMetaAnalyser:
 
             # Now do the classic meta-analysis
             self.meta_analyse(variant_names, phenotype_names)
+            self.save_results(chunk=chunk, node=node)
+
 
     def prepare_cohorts(self, variant_indices, variant_names):
         # First, prepare the genotype data for this chunk, per cohort
@@ -205,13 +204,21 @@ class ClassicMetaAnalyser:
                     meta_analysis_sample_sizes, i_squared,
                     test_combinations):
 
-        self.results = pd.DataFrame({
+        results_dataframe = pd.DataFrame({
             "variant": test_combinations[:, 0],
             "phenotype": test_combinations[:, 1],
             "beta": meta_analysed_effect_sizes,
             "standard_error": meta_analysed_standard_error,
             "i_squared": i_squared,
             "sample_size": meta_analysis_sample_sizes})
+
+        t_statistic_mask = np.full((results_dataframe.shape[0]), True)
+
+        if self.t_statistic_threshold != 0:
+            t_statistic_mask = (
+                    np.abs(results_dataframe['beta'] / results_dataframe['standard_error'])
+                    > self.t_statistic_threshold)
+        self.results = results_dataframe[t_statistic_mask]
 
     def save_results(self, chunk=None, node=None):
 
@@ -225,8 +232,11 @@ class ClassicMetaAnalyser:
             np.save(output_path, results)
         elif self.output_type == "pkl":
             results.to_pickle(output_path)
+        elif self.output_type == "parquet":
+            pq.write_table(pa.Table.from_pandas(results), output_path)
 
         self.results_index += 1
+        self.results = None
 
     def get_output_path(self, chunk, node):
         if chunk is None:
@@ -523,6 +533,10 @@ class CohortAnalyser:
         degrees_of_freedom = (self.sample_size - a_inverse.shape[1])
 
         print("B4 shape is {}".format(b4.shape))
+
+        # t_stat, standard_error = HASE(
+        #     b_variable[0, ...], a_inverse, b_cov_test, C_test,
+        #     number_of_constant_terms, degrees_of_freedom)
 
         t_stat, standard_error = hase_supporting_interactions(
             b_variable, a_inverse, b_cov_test, C_test,

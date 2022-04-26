@@ -4,9 +4,14 @@ import os
 import shutil
 import distutils.core
 import distutils.dir_util
+import sys
+import time
+
+import pandas as pd
 
 import hase
 from tools import mapper
+from memory_profiler import memory_usage
 
 
 class HaseExecutor:
@@ -140,9 +145,11 @@ class HaseExecutor:
                     meta_mapper)
 
     def meta_classic(self):
+        self.run_analysis(mode="meta-classic")
+
+    def run_analysis(self, mode="meta-classic"):
         # We need to get the mapper files. The mapper files 'flip' and 'values' have to be moved to a single
         # folder
-
         command_of_lists = [["-g"], self.run_func_all_studies(self.get_meta_genotype_folder),
                             ["-study_name"], self.study_names,
                             ["-ph"], self.run_func_all_studies(self.get_meta_phenotype_folder),
@@ -152,21 +159,17 @@ class HaseExecutor:
                             ["-encoded"], ["1"] * len(self.study_names),
                             ["-ref_name", self.ref_name],
                             ["-mapper_chunk", "30"],
-                            ["-mode", "meta-classic"],
+                            ["-mode", mode],
                             ["-allow_missingness"],
                             ["-th", "0"],
                             ["-maf", "0.05"]]
-
         covariate_indices_path = self.get_covariate_indices_path()
         if covariate_indices_path:
             command_of_lists.append(["--covariate-indices", covariate_indices_path])
-
         if self.nodes_n is not None and self.node_i is not None:
             command_of_lists.append(
                 ["-node", self.nodes_n, self.node_i, "-cluster", "y"])
-
         argv = [str(arg) for sub_arg in command_of_lists for arg in sub_arg]
-
         hase.main(argv)
 
     def run_func_all_studies(self, func):
@@ -216,3 +219,42 @@ class HaseExecutor:
                 shutil.copytree(
                     self.get_mapper_folder(cohort_name),
                     mapper_folder)
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    resources_dir = os.path.join("..", "resources")
+    project_root = os.path.join("..", "..")
+    dataset = "largedataset"
+    data_dir = os.path.join(resources_dir, "%s" % dataset)
+
+    test_dir = os.path.join(project_root, "unittests", dataset, "out")
+    if not os.path.exists(test_dir):
+        os.makedirs(test_dir)
+
+    study_names = ["test_0", "test_1", "test_2"]
+
+    hase_executor = HaseExecutor(test_dir, project_root,
+                                 study_names)
+    hase_executor.nodes_n = 2
+    hase_executor.node_i = 1
+
+    mem_usage = memory_usage((hase_executor.meta_analyse, (data_dir,)),
+                             timestamps=True)
+    mem_usage_df = pd.DataFrame(mem_usage)
+    timestamps_as_datetime = list()
+    # for memory, timestamp in mem_usage:
+    #     timestamps_as_datetime.append(time.gmtime(timestamp))
+
+    # mem_usage_df[1] = timestamps_as_datetime
+    print(mem_usage_df)
+    print('Memory usage (in chunks of .1 seconds): %s' % mem_usage)
+
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from memory_profiler import profile
 
 from hdgwas.hdregression import B4, \
     get_a_inverse_extended, hase_supporting_interactions, HASE

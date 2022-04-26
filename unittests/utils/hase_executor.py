@@ -11,7 +11,6 @@ import pandas as pd
 
 import hase
 from tools import mapper
-from memory_profiler import memory_usage
 
 
 class HaseExecutor:
@@ -158,7 +157,7 @@ class HaseExecutor:
                             ["-o", self.results_directory],
                             ["-encoded"], ["1"] * len(self.study_names),
                             ["-ref_name", self.ref_name],
-                            ["-mapper_chunk", "30"],
+                            ["-mapper_chunk", "500"],
                             ["-mode", mode],
                             ["-allow_missingness"],
                             ["-th", "0"],
@@ -241,16 +240,15 @@ def main(argv=None):
     hase_executor.nodes_n = 2
     hase_executor.node_i = 1
 
-    mem_usage = memory_usage((hase_executor.meta_analyse, (data_dir,)),
-                             timestamps=True)
-    mem_usage_df = pd.DataFrame(mem_usage)
-    timestamps_as_datetime = list()
-    # for memory, timestamp in mem_usage:
-    #     timestamps_as_datetime.append(time.gmtime(timestamp))
+    hase_executor.meta_analyse(data_dir)
 
-    # mem_usage_df[1] = timestamps_as_datetime
-    print(mem_usage_df)
-    print('Memory usage (in chunks of .1 seconds): %s' % mem_usage)
+    # timestamps_as_datetime = list()
+    # # for memory, timestamp in mem_usage:
+    # #     timestamps_as_datetime.append(time.gmtime(timestamp))
+    #
+    # # mem_usage_df[1] = timestamps_as_datetime
+    # print(mem_usage_df)
+    # print('Memory usage (in chunks of .1 seconds): %s' % mem_usage)
 
 
     return 0

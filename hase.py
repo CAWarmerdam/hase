@@ -779,8 +779,9 @@ def main(argv=None):
                 classic_meta_analyser.analyse_genotype_chunk(
                     genotype, keys, variant_indices,
                     chunk=ch, node=mapper.node[1])
-            classic_meta_analyser.analyse_genotype_chunk(
-                genotype, keys, variant_indices)
+            else:
+                classic_meta_analyser.analyse_genotype_chunk(
+                    genotype, keys, variant_indices)
 
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################

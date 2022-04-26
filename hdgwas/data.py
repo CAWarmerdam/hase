@@ -400,7 +400,7 @@ class MetaPhenotype(object):
                 result[k] = values[~r, i]
             return result, np.array(map.dic.keys())[~r]
 
-        self.chunk_size = 10000
+        self.chunk_size = 5000
         self.exclude = None
         self.include = None
         self.name = None

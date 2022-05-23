@@ -226,7 +226,7 @@ def main(argv=None):
 
     resources_dir = os.path.join("..", "resources")
     project_root = os.path.join("..", "..")
-    dataset = "largedataset"
+    dataset = "freqdataset"
     data_dir = os.path.join(resources_dir, "%s" % dataset)
 
     test_dir = os.path.join(project_root, "unittests", dataset, "out")

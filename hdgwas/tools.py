@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import time
 import numpy as np
 import pandas as pd
@@ -34,7 +36,7 @@ class Timer(object):
         self.secs = self.end - self.start
         self.msecs = self.secs * 1000  # millisecs
         if self.verbose:
-            print 'elapsed time: %f ms' % self.msecs
+            print('elapsed time: %f ms' % self.msecs)
 
 
 def timing(f):
@@ -42,7 +44,7 @@ def timing(f):
         time1 = time.time()
         ret = f(*args, **kwargs)
         time2 = time.time()
-        print '%s function took %0.3f s' % (f.func_name, (time2 - time1))
+        print('%s function took %0.3f s' % (f.func_name, (time2 - time1)))
         return ret
 
     return wrap
@@ -150,7 +152,7 @@ class HaseAnalyser(Analyser):
             try:
                 d = np.load(os.path.join(self.result_path, '{}result.npy'.format(self.file_number))).item()
             except:
-                print "Can't read {}".format(i)
+                print("Can't read {}".format(i))
 
             p_value = self.get_p_value(d['t-stat'], df=self.DF)
             self.results['t-stat'] = np.append(self.results['t-stat'], d['t-stat'].flatten())
@@ -170,11 +172,11 @@ class HaseAnalyser(Analyser):
                     break
             if len(files) != 0:
                 for i in files:
-                    print i
+                    print(i)
                     try:
                         d = np.load(i).item()
                     except:
-                        print "Can't read {}".format(i)
+                        print("Can't read {}".format(i))
                         continue
                     p_value = self.get_p_value(d['t-stat'], df=self.DF)
                     self.results['t-stat'] = np.append(self.results['t-stat'], d['t-stat'].flatten())
@@ -359,20 +361,21 @@ class Mapper(object):
 
     def __init__(self):
 
+        self.is_filtered = False
         self.name = None
         self.genotype_names = []
         self.dic = OrderedDict()
         self.n_study = 0
-        self.values = []  # array (N_study, N_keys), where N_keys = number of ID in reference table
+        self.values = np.array([])  # array (N_study, N_keys), where N_keys = number of ID in reference table
         self.keys = None
         self.n_keys = None
         self.processed = 0
         self._limit = None
-        self.reference = False
+        self.reference = None
         self.include = None
         self.exclude = None
-        self.include_ind = np.array([])
-        self.exclude_ind = np.array([])
+        self.include_ind = np.array([], dtype=np.int64)
+        self.exclude_ind = np.array([], dtype=np.int64)
         # self.hash=HashTable()
         self.cluster = None
         self.node = None
@@ -423,7 +426,7 @@ class Mapper(object):
             return None
 
     # @timing
-    def fill(self, keys, name, repeats=False, reference=False):  # TODO (middle) remove
+    def fill(self, keys, name, repeats=False, reference=None):  # TODO (middle) remove
         """
 		Fill the mapper
 		:param keys: The labels for phenotypes/covariates.single that are passed
@@ -634,12 +637,12 @@ class Mapper(object):
                                                                          where='CHR=self.exclude.CHR & bp=self.exclude.bp')
                         self.exclude_ind = self.query_exclude.index
 
-        print "Time to select SNPs {}s".format(t_q.secs)
+        print("Time to select SNPs {}s".format(t_q.secs))
 
         if self.exclude is not None or self.include is not None:
             self.include_ind = np.setxor1d(self.include_ind, self.exclude_ind)
             if len(self.include_ind) == 0:
-                print ('None of included ID found in genotype data!')
+                print('None of included ID found in genotype data!')
                 return None, None
             else:
                 ind = np.intersect1d(np.arange(start, finish), self.include_ind)
@@ -675,7 +678,7 @@ class Mapper(object):
                     self.processed = self.processed - len(np.arange(start, finish))
                     break
                 else:
-                    print 'Added back chunk {}'.format(ch)
+                    print ('Added back chunk {}'.format(ch))
                     self.chunk_pool.append(ch)
                     break
             else:
@@ -714,52 +717,86 @@ class Mapper(object):
             self.processed = finish
 
         with Timer() as t_q:
-            if self.include is not None:
-                if len(self.include_ind) == 0:
+
+            if not self.is_filtered:
+
+                # Now, depending on the presence of a grouping by dataset,
+                # either set all unwanted variants in 'values' to -1, or
+                # only do this for values unwanted per group.
+                #
+
+                # First get the indices of unwanted variants
+
+                if self.include is not None:
                     if 'ID' in self.include.columns:
-                        self.include_ind = np.in1d(self.keys, self.include.ID)
-                        self.include_ind = np.where(self.include_ind == True)[0]
-                    # self.query_include=self.reference.index.select('reference',where='ID=self.include.ID')
-                    # self.include_ind=self.query_include.index
+                        # Get a boolean array indicating if each of the keys
+                        # are in the variants that should be included
+                        unique_ids = self.include.ID.unique()
+                        inclusion_boolean_array = np.in1d(self.keys, unique_ids)
+                        # Now select the indices for those keys that should be included.
+                        include_indices = dict(zip(unique_ids, np.where(inclusion_boolean_array)[0]))
+                        self.include['indices'] = self.include.ID.map(include_indices)
                     elif 'CHR' in self.include.columns and 'bp' in self.include.columns:
-                        self.query_include = self.reference.index.select('reference',
-                                                                         where='CHR=self.include.CHR & bp=self.include.bp')
-                        self.include_ind = self.query_include.index
+                        raise NotImplementedError()
+                        # TODO: check first if this works as expected
 
-            if self.exclude is not None:
-                if len(self.exclude_ind) == 0:
+                        # self.query_include = self.reference.index.select(
+                        #     'reference', where='CHR=self.include.CHR & bp=self.include.bp')
+                        # self.include['indices'] = self.query_include.index
+                    if "cohort" not in self.include.index.names:
+                        self.include = pd.concat(
+                            [self.include]*self.values.shape[1],
+                            keys=np.arange(self.values.shape[1]),
+                            names=["cohort", "row"])
+
+                    new_values = np.full_like(self.values, -1)
+                    new_values[
+                        self.include.indices,
+                        self.include.index.get_level_values("cohort").values] = (
+                        self.values[
+                            self.include.indices,
+                            self.include.index.get_level_values("cohort").values])
+
+                    self.values = new_values
+
+
+                if self.exclude is not None:
                     if 'ID' in self.exclude.columns:
-                        self.exclude_ind = np.in1d(self.keys, self.exclude.ID)
-                        self.exclude_ind = np.where(self.exclude_ind == True)[0]
-                    # self.query_exclude=self.reference.index.select('reference',where='ID=self.exclude.ID')
-                    # self.exclude_ind=self.query_exclude.index
+                        # Get a boolean array indicating if each of the keys
+                        # are in the variants that should be included
+                        unique_ids = self.exclude.ID.unique()
+                        exclusion_boolean_array = np.in1d(self.keys, unique_ids)
+                        # Now select the indices for those keys that should be included.
+                        exclude_indices = dict(zip(unique_ids, np.where(exclusion_boolean_array)[0]))
+                        self.exclude['indices'] = self.exclude.ID.map(exclude_indices)
                     elif 'CHR' in self.exclude.columns and 'bp' in self.exclude.columns:
-                        self.query_exclude = self.reference.index.select('reference',
-                                                                         where='CHR=self.exclude.CHR & bp=self.exclude.bp')
-                        self.exclude_ind = self.query_exclude.index
+                        raise NotImplementedError()
+                        # TODO: check first if this works as expected
 
-        print "Time to select SNPs {}s".format(t_q.secs)
+                        # self.query_exclude = self.reference.index.select(
+                        #     'reference', where='CHR=self.include.CHR & bp=self.include.bp')
+                        # self.exclude['indices'] = self.query_exclude.index
+                    if "cohort" not in self.exclude.index.names:
+                        self.exclude = pd.concat(
+                        [self.exclude]*self.values.shape[1],
+                        keys=np.arange(self.values.shape[1]),
+                        names=["cohort", "row"])
 
-        if self.exclude is not None or self.include is not None:
-            self.include_ind = np.setxor1d(self.include_ind, self.exclude_ind)
-        else:
-            self.include_ind = np.arange(len(self.values))
+                    self.values[self.exclude.indices, self.exclude.index.get_level_values("cohort").values] = -1
+                self.is_filtered = True
+
+        print("Time to select SNPs {}s".format(t_q.secs))
 
         if allow_missingness:
             # Get the indices for those values that are present in ANY studies
             # Values that are greater than -1 are present
             all_indices_for_values_with_all_studies_available = np.where(
-                (self.values[:, :] > -1).any(axis=1))
+                (self.values[:, :] > -1).any(axis=1))[0]
         else:
             # Get the indices for those values that are present in ALL studies
             # Values that are greater than -1 are present
             all_indices_for_values_with_all_studies_available = np.where(
-                (self.values[:, :] > -1).all(axis=1))
-
-        # Get the intersection of values for which it was specified that they should be included,
-        # and values that are actually available
-        all_indices_for_values_with_all_studies_available = \
-            np.intersect1d(all_indices_for_values_with_all_studies_available, self.include_ind)
+                (self.values[:, :] > -1).all(axis=1))[0]
 
         all_indices_for_values_with_all_studies_available = all_indices_for_values_with_all_studies_available[
             all_indices_for_values_with_all_studies_available >= start]
@@ -791,7 +828,7 @@ class Mapper(object):
                 self.processed = self.processed = start
                 finish = start
             else:
-                print 'Added back chunk {}'.format(ch)
+                print ('Added back chunk {}'.format(ch))
                 self.chunk_pool.append(ch)
                 finish = ch[0]
 
@@ -816,6 +853,42 @@ class Mapper(object):
                 raise ValueError('There is no common names between studies')
             indexes = indexes[~r]
         return indexes
+
+    def load_filter_exclude(self, paths):
+        self.exclude = self.load_variant_filter_dataframes(paths, (("ID",), ("CHR", "bp")))
+
+    def load_filter_include(self, paths):
+        self.include = self.load_variant_filter_dataframes(paths, (("ID",), ("CHR", "bp")))
+
+    @staticmethod
+    def load_variant_filter_dataframes(paths, column_sets=None):
+        filter_dataframes = []
+        for variant_filter_file in paths:
+            filter_dataframe = pd.DataFrame.from_csv(variant_filter_file, index_col=None)
+            print('Exclude:')
+            print(filter_dataframe.head())
+            if column_sets is not None:
+                matching_column_sets = np.array(
+                    [pd.Series(column_set).isin(filter_dataframe.columns).all() for column_set in column_sets]).sum()
+                if matching_column_sets == 0:
+                    raise ValueError('{} table should have one of the following column combinations:{}{}'.format(
+                        variant_filter_file, os.linesep, (
+                            " OR:{}".format(os.linesep)
+                                .join(["', '".join(column_set) for column_set in column_sets]))))
+                if matching_column_sets > 1:
+                    raise ValueError('{} table columns matches more than one possible column combination:{}{}'.format(
+                        variant_filter_file, os.linesep, (
+                            " OR:{}".format(os.linesep)
+                                .join(["', '".join(column_set) for column_set in column_sets]))))
+            filter_dataframes.append(filter_dataframe)
+        if len(filter_dataframes) == 1:
+            mapper_exclude = filter_dataframes[0]
+        else:
+            mapper_exclude = pd.concat(
+                filter_dataframes, keys=np.arange(len(paths)), names=["cohort", "row"])
+        return mapper_exclude
+
+
 
 
 ########################################################################
@@ -1143,7 +1216,7 @@ def check_converter(converted_folder, study_name):
             print ('Converted number of IDs {} != {} original number'.format(df_ind.shape[0], df_tmp[0][0]))
         else:
             print ('Number of individuals {} '.format(df_ind.shape[0]))
-            print df_ind.head()
+            print (df_ind.head())
 
     if len(l_probes) != 2:
         print ('There should be 2 files in probes folder, you have {}!'.format(len(l_probes)))
@@ -1160,7 +1233,7 @@ def check_converter(converted_folder, study_name):
     else:
         print ('Converted number of variants {}'.format(N_probs))
 
-        print probes.select('probes', start=0, stop=10)
+        print (probes.select('probes', start=0, stop=10))
         probes.close()
 
     if len(l_genotype) == 0:
@@ -1177,8 +1250,8 @@ def check_converter(converted_folder, study_name):
         else:
             print ('Number of variants in genotype folder {}'.format(index))
 
-        print h5py.File(os.path.join(converted_folder, 'genotype', l_genotype[0]), 'r')['genotype'][...]
+        print (h5py.File(os.path.join(converted_folder, 'genotype', l_genotype[0]), 'r')['genotype'][...])
 
 
 if __name__ == '__main__':
-    print 'tools'
+    print ('tools')

@@ -77,6 +77,7 @@ class HaseExecutor:
         if not os.path.exists(self.get_mapper_folder(study_name)):
             mapper.main(["-g", hdf5_genotype_directory,
                          "-study_name", study_name,
+                         "-ref_name", self.ref_name,
                          "-o", self.get_mapper_folder(study_name)])
 
     def per_cohort_partial_derivatives(self, cov_interaction_matrix, hdf5_genotype_directory, partial_derivatives,
@@ -87,6 +88,7 @@ class HaseExecutor:
                    "-mapper", self.get_mapper_folder(study_name),
                    "-ph", phenotype_matrix,
                    "-cov", cov_interaction_matrix,
+                   "-ref_name", self.ref_name,
                    "-mode", "single-meta"])
 
     def finalize_per_cohort(self, encoding_output, hdf5_genotype_directory, partial_derivatives, study_name):
@@ -122,6 +124,7 @@ class HaseExecutor:
                    "-o", encoding_output,
                    "-mapper", self.get_mapper_folder(study_name),
                    "-ph", phenotype_matrix,
+                   "-ref_name", self.ref_name,
                    "-mode", "encoding"])
 
     def prepare_mapper_meta_folder(self):
@@ -157,6 +160,7 @@ class HaseExecutor:
                             ["-o", self.results_directory],
                             ["-encoded"], ["1"] * len(self.study_names),
                             ["-ref_name", self.ref_name],
+                            ["-snp_id_inc", "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/largedataset/out/snp_id_inc.txt"],
                             ["-mapper_chunk", "500"],
                             ["-mode", mode],
                             ["-allow_missingness"],
@@ -226,7 +230,7 @@ def main(argv=None):
 
     resources_dir = os.path.join("..", "resources")
     project_root = os.path.join("..", "..")
-    dataset = "freqdataset"
+    dataset = "largedataset"
     data_dir = os.path.join(resources_dir, "%s" % dataset)
 
     test_dir = os.path.join(project_root, "unittests", dataset, "out")

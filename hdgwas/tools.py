@@ -731,11 +731,12 @@ class Mapper(object):
                     if 'ID' in self.include.columns:
                         # Get a boolean array indicating if each of the keys
                         # are in the variants that should be included
-                        unique_ids = self.include.ID.unique()
-                        inclusion_boolean_array = np.in1d(self.keys, unique_ids)
+
+                        key_dictionary = dict(zip(self.keys, range(0, len(self.keys))))
                         # Now select the indices for those keys that should be included.
-                        include_indices = dict(zip(unique_ids, np.where(inclusion_boolean_array)[0]))
-                        self.include['indices'] = self.include.ID.map(include_indices)
+
+                        self.include['indices'] = self.include.ID.apply(lambda x: key_dictionary.get(x, (-1)))
+                        self.include = self.include[self.include['indices'] != -1]
                     elif 'CHR' in self.include.columns and 'bp' in self.include.columns:
                         raise NotImplementedError()
                         # TODO: check first if this works as expected
@@ -764,11 +765,12 @@ class Mapper(object):
                     if 'ID' in self.exclude.columns:
                         # Get a boolean array indicating if each of the keys
                         # are in the variants that should be included
-                        unique_ids = self.exclude.ID.unique()
-                        exclusion_boolean_array = np.in1d(self.keys, unique_ids)
+
+                        key_dictionary = dict(zip(self.keys, range(0, len(self.keys))))
                         # Now select the indices for those keys that should be included.
-                        exclude_indices = dict(zip(unique_ids, np.where(exclusion_boolean_array)[0]))
-                        self.exclude['indices'] = self.exclude.ID.map(exclude_indices)
+
+                        self.exclude['indices'] = self.exclude.ID.apply(lambda x: key_dictionary.get(x, (-1)))
+                        self.exclude = self.exclude[self.exclude['indices'] != -1]
                     elif 'CHR' in self.exclude.columns and 'bp' in self.exclude.columns:
                         raise NotImplementedError()
                         # TODO: check first if this works as expected
@@ -864,9 +866,7 @@ class Mapper(object):
     def load_variant_filter_dataframes(paths, column_sets=None):
         filter_dataframes = []
         for variant_filter_file in paths:
-            filter_dataframe = pd.DataFrame.from_csv(variant_filter_file, index_col=None)
-            print('Exclude:')
-            print(filter_dataframe.head())
+            filter_dataframe = pd.read_csv(variant_filter_file, index_col=None)
             if column_sets is not None:
                 matching_column_sets = np.array(
                     [pd.Series(column_set).isin(filter_dataframe.columns).all() for column_set in column_sets]).sum()
@@ -874,12 +874,12 @@ class Mapper(object):
                     raise ValueError('{} table should have one of the following column combinations:{}{}'.format(
                         variant_filter_file, os.linesep, (
                             " OR:{}".format(os.linesep)
-                                .join(["', '".join(column_set) for column_set in column_sets]))))
+                                .join(["'{}'".format("', '".join(column_set)) for column_set in column_sets]))))
                 if matching_column_sets > 1:
                     raise ValueError('{} table columns matches more than one possible column combination:{}{}'.format(
                         variant_filter_file, os.linesep, (
                             " OR:{}".format(os.linesep)
-                                .join(["', '".join(column_set) for column_set in column_sets]))))
+                                .join(["'{}'".format("', '".join(column_set)) for column_set in column_sets]))))
             filter_dataframes.append(filter_dataframe)
         if len(filter_dataframes) == 1:
             mapper_exclude = filter_dataframes[0]

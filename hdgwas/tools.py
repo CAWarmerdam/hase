@@ -725,18 +725,18 @@ class Mapper(object):
                 # only do this for values unwanted per group.
                 #
 
-                # First get the indices of unwanted variants
+                # First make a dictionary with keys and indices
+                key_index_dictionary = dict(zip(self.keys, range(0, len(self.keys))))
+                print("Finished making key:index dictionary of size: {}".format(len(key_index_dictionary)))
 
                 if self.include is not None:
                     if 'ID' in self.include.columns:
-                        # Get a boolean array indicating if each of the keys
-                        # are in the variants that should be included
-
-                        key_dictionary = dict(zip(self.keys, range(0, len(self.keys))))
                         # Now select the indices for those keys that should be included.
-
-                        self.include['indices'] = self.include.ID.apply(lambda x: key_dictionary.get(x, (-1)))
+                        print("Subsetting mapper to include specified variants. (n = {})".format(self.include.shape[0]))
+                        self.include['indices'] = self.include.ID.apply(lambda x: key_index_dictionary.get(x, (-1)))
+                        print("Retrieved all indices of variants that should be included!")
                         self.include = self.include[self.include['indices'] != -1]
+                        print("Number of variants that remain after excluding variants not in mapper: {}".format(self.include.shape[0]))
                     elif 'CHR' in self.include.columns and 'bp' in self.include.columns:
                         raise NotImplementedError()
                         # TODO: check first if this works as expected
@@ -763,13 +763,8 @@ class Mapper(object):
 
                 if self.exclude is not None:
                     if 'ID' in self.exclude.columns:
-                        # Get a boolean array indicating if each of the keys
-                        # are in the variants that should be included
-
-                        key_dictionary = dict(zip(self.keys, range(0, len(self.keys))))
                         # Now select the indices for those keys that should be included.
-
-                        self.exclude['indices'] = self.exclude.ID.apply(lambda x: key_dictionary.get(x, (-1)))
+                        self.exclude['indices'] = self.exclude.ID.apply(lambda x: key_index_dictionary.get(x, (-1)))
                         self.exclude = self.exclude[self.exclude['indices'] != -1]
                     elif 'CHR' in self.exclude.columns and 'bp' in self.exclude.columns:
                         raise NotImplementedError()
@@ -780,9 +775,9 @@ class Mapper(object):
                         # self.exclude['indices'] = self.query_exclude.index
                     if "cohort" not in self.exclude.index.names:
                         self.exclude = pd.concat(
-                        [self.exclude]*self.values.shape[1],
-                        keys=np.arange(self.values.shape[1]),
-                        names=["cohort", "row"])
+                            [self.exclude]*self.values.shape[1],
+                            keys=np.arange(self.values.shape[1]),
+                            names=["cohort", "row"])
 
                     self.values[self.exclude.indices, self.exclude.index.get_level_values("cohort").values] = -1
                 self.is_filtered = True

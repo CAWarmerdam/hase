@@ -392,7 +392,7 @@ class CohortAnalyser:
 
     def maf_filter(self):
         threshold = self.get_maf_threshold()
-        variant_filter = [True] * self.analyser.maf.shape[0]
+        variant_filter = np.array([True] * self.analyser.maf.shape[0])
         if threshold != 0:
             variant_filter = (self.analyser.maf >= threshold) \
                              & (self.analyser.maf <= (1 - threshold)) \

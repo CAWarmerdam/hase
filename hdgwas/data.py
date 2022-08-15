@@ -362,7 +362,6 @@ class ParData(Data):
         return variant_dependent_a
 
     def get(self, gen_order=None, phen_order=None, cov_order=None):
-
         if gen_order is None or phen_order is None or cov_order is None:
             raise ValueError('PD order is not define!')
         if isinstance(self.a_inv, type(None)):
@@ -1188,21 +1187,27 @@ class PDFolder(Folder):
     def read(self, file):
         pass
 
-    def load(self):
-
-        if self.name + '_b4.npy' in self.files:
-            self._data.b4 = np.load(os.path.join(self.path, self.name + '_b4.npy'))
-
-        self._data.a_cov = np.load(os.path.join(self.path, self.name + '_a_cov.npy'))
-        self._data.b_cov = np.load(os.path.join(self.path, self.name + '_b_cov.npy'))
-        self._data.C = np.load(os.path.join(self.path, self.name + '_C.npy'))
+    def load_metadata(self):
         self._data.metadata = np.load(os.path.join(self.path, self.name + '_metadata.npy')).item()
 
+    def load(self, into_memory=True):
+        memory_map_mode = "c"
+        if into_memory:
+            memory_map_mode = None
+
+        if self.name + '_b4.npy' in self.files:
+            self._data.b4 = np.load(os.path.join(self.path, self.name + '_b4.npy'), mmap_mode=memory_map_mode)
+
+        self._data.a_cov = np.load(os.path.join(self.path, self.name + '_a_cov.npy'), mmap_mode=memory_map_mode)
+        self._data.b_cov = np.load(os.path.join(self.path, self.name + '_b_cov.npy'), mmap_mode=memory_map_mode)
+        self._data.C = np.load(os.path.join(self.path, self.name + '_C.npy'), mmap_mode=memory_map_mode)
+        self.load_metadata()
+
         if self.name + '_a_inv.npy' in self.files:  # TODO (low) current version does not save inv matrix
-            self._data.a_inv = np.load(os.path.join(self.path, self.name + '_a_inv.npy'))
+            self._data.a_inv = np.load(os.path.join(self.path, self.name + '_a_inv.npy'), mmap_mode=memory_map_mode)
 
         elif self.name + '_a_test.npy' in self.files:
-            self._data.a_test = np.load(os.path.join(self.path, self.name + '_a_test.npy'))
+            self._data.a_test = np.load(os.path.join(self.path, self.name + '_a_test.npy'), mmap_mode=memory_map_mode)
 
         else:
             raise ValueError('There is not a_inv.npy or a_test.npy file in directory {}'.format(self.path))

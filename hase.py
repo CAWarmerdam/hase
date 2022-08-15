@@ -662,7 +662,7 @@ def main(argv=None):
             for i, j in enumerate(args.derivatives):
                 partial_derivatives_folders.append(Reader('partial'))
                 partial_derivatives_folders[i].start(j, study_name=args.study_name[i])
-                partial_derivatives_folders[i].folder.load()
+                partial_derivatives_folders[i].folder.load(into_memory=False)
 
         print("Time used to load partial derivatives is {}s".format(t.secs))
 

@@ -160,7 +160,6 @@ class HaseExecutor:
                             ["-o", self.results_directory],
                             ["-encoded"], ["1"] * len(self.study_names),
                             ["-ref_name", self.ref_name],
-                            ["-snp_id_inc", "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/largedataset/out/snp_id_inc.txt"],
                             ["-mapper_chunk", "500"],
                             ["-mode", mode],
                             ["-allow_missingness"],

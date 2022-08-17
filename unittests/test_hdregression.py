@@ -149,8 +149,8 @@ class TestInteractionSupportingHase(unittest.TestCase):
         C = C_1 + C_2
         b4 = b4_1 + b4_2
 
-        a_inverse_alternative = get_a_inverse_extended(a_cov, variant_dependent_a)
-        a_inverse_alternative[missing_variant,::] = get_a_inverse_extended(a_cov_1,
+        a_inverse_alternative, _ = get_a_inverse_extended(a_cov, variant_dependent_a)
+        a_inverse_alternative[missing_variant,::], _ = get_a_inverse_extended(a_cov_1,
                                                                            variant_dependent_a_1)[missing_variant,::]
 
         b_variable = b4[np.newaxis, ...]
@@ -254,7 +254,7 @@ class TestInteractionSupportingHase(unittest.TestCase):
 
         b4 = B4(phenotype_matrix_encoded, genotype_matrix_encoded)
 
-        a_inv = get_a_inverse_extended(a_cov, variant_dependent_A)
+        a_inv, _ = get_a_inverse_extended(a_cov, variant_dependent_A)
 
         b_variable = np.append(b_interaction, b4[np.newaxis, ...], axis=0)
 
@@ -505,7 +505,7 @@ def fit_model(X2, y):
 def calculate_a(covariates_matrix, genotype_matrix):
     a_covariates = A_covariates(covariates_matrix)
     a_tests = A_tests(covariates_matrix, genotype_matrix)
-    return A_inverse(a_covariates, a_tests)
+    return A_inverse(a_covariates, a_tests)[0]
 
 
 def test_hase2_no_interaction(number_of_individuals,
@@ -706,7 +706,7 @@ def test_hase2_with_interaction(number_of_individuals, number_of_variants):
 
     b4 = B4(phenotype_matrix_encoded, genotype_matrix_encoded)
 
-    a_inv = get_a_inverse_extended(a_cov, variant_dependent_A)
+    a_inv, _ = get_a_inverse_extended(a_cov, variant_dependent_A)
 
     b_variable = np.append(b_interaction, b4[np.newaxis,...], axis=0)
 

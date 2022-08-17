@@ -245,7 +245,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             actual_b4_data_frame = pd.DataFrame(
                 cohort.calculate_b4_matrix(genotype, phenotype),
                 columns=cohort.get_phenotype_names(phenotype_names),
-                index=cohort.get_variant_names(keys))
+                index=cohort.get_variant_names())
 
             required_phenotype_names = phenotype_names[
                 np.isin(phenotype_names, expected_b4_data_frame.columns.values)]
@@ -257,7 +257,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             actual_betas = pd.DataFrame(
                 cohort.get_betas(),
                 columns=cohort.get_phenotype_names(phenotype_names),
-                index=cohort.get_variant_names(keys))
+                index=cohort.get_variant_names())
 
             self.compare_actual_matrix_to_expected(
                 actual_betas, expected_betas[required_phenotype_names])

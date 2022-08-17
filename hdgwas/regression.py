@@ -101,7 +101,7 @@ def haseregression(phen,gen,cov, mapper, Analyser, maf,intercept=True, interacti
 
 
 			a_test=A_tests(covariates,genotype,intercept=intercept)
-			a_inv=A_inverse(a_cov,a_test)
+			a_inv,_=A_inverse(a_cov,a_test)
 
 			N_con=a_inv.shape[1] - 1
 

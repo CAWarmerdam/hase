@@ -255,26 +255,34 @@ def get_a_inverse_extended(a_covariates, variant_dependent_a):
     a_complete[..., :, n:k] = variant_dependent_a
     a_complete = np.triu(a_complete) + np.triu(a_complete, 1).transpose((0,2,1))
 
-    return(np.linalg.inv(a_complete))
+    a_invertible = np.linalg.det(a_complete) != 0
+
+    a_complete[a_invertible] = np.linalg.inv(a_complete[a_invertible])
+    return a_complete, a_invertible
 
 
 # @timing
 def A_inverse(a_covariates, a_test):  # TODO (low) extend for any number of tests in model
-
-    A_inv = []
     n, m = a_covariates.shape
     k = n + 1
+    a_inverse = np.zeros((a_test.shape[0], k, k))
+    a_invertible = np.full((a_test.shape[0]), True)
     for i in xrange(a_test.shape[0]):  # TODO (low) not in for loop
         inv = np.zeros(k * k).reshape(k, k)
         inv[0:k - 1, 0:k - 1] = a_covariates
         inv[k - 1, :] = a_test[i, :]
         inv[0:k, k - 1] = a_test[i, 0:k]
         try:
-            A_inv.append(np.linalg.inv(inv))
-        except:
-            A_inv.append(np.zeros(k * k).reshape(k, k))  # TODO (high) test; check influence on results; warning;
+            a_inverse[i] = np.linalg.inv(inv)
+        except np.linalg.LinAlgError as err:
+            if 'Singular matrix' in str(err):
+                Warning("Singular matrix!")
+                a_inverse[i] = inv
+                a_invertible[i] = False
+            else:
+                raise
 
-    return np.array(A_inv)
+    return np.array(a_inverse), a_invertible
 
 
 # @timing

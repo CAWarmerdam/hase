@@ -553,7 +553,7 @@ def main(argv=None):
             if args.allow_missingness:
                 a_inv = a_inverse_extended_allow_missingness(a_test, a_cov_stack, variant_indices)
             else:
-                a_inv = get_a_inverse_extended(a_cov, a_test)
+                a_inv, _ = get_a_inverse_extended(a_cov, a_test)
 
             number_of_variable_terms = a_test.shape[2]
             number_of_constant_terms = a_inv.shape[1] - number_of_variable_terms

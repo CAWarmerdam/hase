@@ -31,6 +31,7 @@ class ClassicMetaAnalyser:
         self.output_type = "parquet"
         self.results = None
         self.results_index = 0
+        self._debug = True
 
     @staticmethod
     def construct_cohort_list(meta_pard, sample_intersection, sample_indices,
@@ -88,11 +89,14 @@ class ClassicMetaAnalyser:
             # Now do the classic meta-analysis
             self.meta_analyse(variant_names, phenotype_names)
             self.save_results(chunk=chunk, node=node)
+            if self._debug:
+                self.write_debug()
 
 
     def prepare_cohorts(self, variant_indices, variant_names):
         # First, prepare the genotype data for this chunk, per cohort
         for cohort in self.cohort_list:
+            print("Preparing cohort named '{}'".format(cohort.study_name))
             cohort.set_variant_names(variant_names)
             # Get the partial derivatives for each study
             with Timer() as t_pd:
@@ -219,6 +223,15 @@ class ClassicMetaAnalyser:
                     > self.t_statistic_threshold)
         self.results = results_dataframe[t_statistic_mask]
 
+    def write_debug(self):
+        for cohort in self.cohort_list:
+            file_path = os.path.join(
+                self.out, "failed", cohort.study_name, "a_singular_{}.txt")
+            for variant_name, a_singular_matrix in cohort.a_singular:
+                np.savetxt(
+                    file_path.format(variant_name),
+                    a_singular_matrix)
+
     def save_results(self, chunk=None, node=None):
 
         print('Saving results to {}'.format(self.out))
@@ -313,6 +326,7 @@ class CohortAnalyser:
         self._a_cov = a_cov
         self._a_test = a_test
         self.a_inv = None
+        self.a_singular = dict()
         self.phenotype_names = None
         self.variant_indices = None
         self.phenotype_indices = None
@@ -346,13 +360,28 @@ class CohortAnalyser:
     def finalize_partial_derivatives(self):
         a_test = self.get_a_test()
         a_cov = self.get_a_cov()
+        variant_names = self.get_variant_names()
 
         # Use new A_inverse that supports variable number of non-constant A parts
-        self.a_inv = get_a_inverse_extended(a_cov, a_test)
+        a_inv, a_invertible = get_a_inverse_extended(a_cov, a_test)
+
+        # Update variant indices with all variants for which the matrix
+        # cannot be inverted
+        self.a_singular = dict(zip(
+            variant_names[~a_invertible],
+            a_inv[~a_invertible]))
+
+        self.add_variant_filter(a_invertible)
+        self.a_inv = a_inv[a_invertible]
 
         self._set_number_of_variable_terms()
         self._set_number_of_constant_terms()
         self._finalized = True
+
+    def add_variant_filter(self, filter):
+        indices_ = self.variant_indices[self.variant_indices != -1]
+        indices_[~filter] = -1
+        self.variant_indices[self.variant_indices != -1] = indices_
 
     def get_a_cov(self):
         return self._a_cov[np.ix_(self.get_covariate_indices(),
@@ -571,7 +600,8 @@ class CohortAnalyser:
         sample_sizes[np.ix_(self.variant_indices != -1, self.phenotype_indices != -1)] = self.sample_size
         return sample_sizes
 
-    def get_variant_names(self, variant_names):
+    def get_variant_names(self):
+        variant_names = self.analyser.rsid
         variant_indices = self.variant_indices
         if variant_indices is None:
             variant_filter = [True] * variant_names

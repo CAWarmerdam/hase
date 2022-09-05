@@ -371,17 +371,25 @@ def main(argv=None):
         labels=maf_bins)
 
     # Load data
+    print("Loading Empirical results...")
     empirical_results = pd.read_csv(args.emp, sep="\t")
+    print("Empirical results loaded!")
     empirical_results[test_stat] = (
         empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
     empirical_results[test_stat] = (
         empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
+    print("Merging minor allele frequency table...")
     empirical_results = empirical_results.merge(
         maf_table, how="inner", left_on="SNP", right_on="ID")
+    print("Merging done!")
 
+    print("Loading permutation results...")
     permutation_results = pd.read_csv(args.perm, sep="\t")
+    print("Permutation results loaded!")
+    print("Merging minor allele frequency table...")
     permutation_results = permutation_results.merge(
         maf_table, how="inner", left_on="SNP", right_on="ID")
+    print("Merging done!")
     permutation_results[test_stat] = (
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     permutation_results[test_stat] = (
@@ -397,7 +405,14 @@ def main(argv=None):
 
     # Start iterating over genes
     write_header = True
-    for phenotype in empirical_results["phenotype"].unique():
+    print("Estimating accurate p-values for:")
+    phenotypes_to_loop_through = empirical_results["phenotype"].unique()
+
+    for i, phenotype in enumerate(phenotypes_to_loop_through):
+        print(
+            "   {}, {}/{}\r"
+            .format(phenotype, i, len(phenotypes_to_loop_through)))
+
         # Estimate pvalues for this phenotype
         accurate_pvalue_estimations = estimate_pvalues_over_maf_bins(
             empirical_results.loc[empirical_results["phenotype"] == phenotype],

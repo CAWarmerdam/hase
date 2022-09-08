@@ -245,7 +245,18 @@ class ClassicMetaAnalyser:
         elif self.output_type == "pkl":
             results.to_pickle(output_path)
         elif self.output_type == "parquet":
-            pq.write_table(pa.Table.from_pandas(results), output_path)
+            print(results.dtypes)
+
+            pyarrow_schema = pa.schema(
+                [("variant", pa.string()),
+                 ("phenotype", pa.string()),
+                 ("beta", pa.float64()),
+                 ("standard_error", pa.float64()),
+                 ("i_squared", pa.float64()),
+                 ("sample_size", pa.float64())])
+
+            pq.write_table(pa.Table.from_pandas(
+                results, pyarrow_schema), output_path)
 
         self.results_index += 1
         self.results = None

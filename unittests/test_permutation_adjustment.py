@@ -14,50 +14,40 @@ sns.set_style(style="ticks")
 
 def anderson_darling_gpd(sorted_values, genpareto_dist, genpareto_shape, table):
     N = len(sorted_values)
-
     # Get the cumulative density function, log transformed
     logcdf = genpareto_dist.logcdf(sorted_values)
     # Get the survival function, log transformed
     logsf = genpareto_dist.logsf(sorted_values)
-
     i = np.arange(1, N + 1)
     anderson_darling = (
             -N - np.sum((2*i - 1.0) / N * (logcdf + logsf[::-1]), axis=0))
-
     significance_values_character = np.array(table.columns[1:table.shape[1]])
     critical_values = np.array([np.interp(genpareto_shape, table["k"], table[col])
                                 for col in significance_values_character])
-
     significance_values = significance_values_character.astype(float)
-
     return anderson_darling, critical_values, significance_values
 
 
 def plot_genpareto(standard_scores, genpareto_fit, n_exceedances, label):
     abs_standard_scores_ordered = np.sort(np.abs(standard_scores))[::-1]
-
     # Calculate the threshold value
     exceedances_threshold = (
         abs_standard_scores_ordered[n_exceedances]
         + abs_standard_scores_ordered[n_exceedances+1]) / 2
-
     # Calculate the z argument for the generalized pareto distribution
     exceedence_values_sorted_ascending = np.sort(
         abs_standard_scores_ordered[(abs_standard_scores_ordered > exceedances_threshold)])
     z_test_statistics_for_fit = (
             exceedence_values_sorted_ascending
             - exceedances_threshold)
-
     # Calculate empirical CDF
     empirical_cdf = (
             np.arange(1, len(exceedence_values_sorted_ascending)+1)
             / float(len(exceedence_values_sorted_ascending)))
-
     # X values
     x_values = np.arange(z_test_statistics_for_fit.min(),
                          z_test_statistics_for_fit.max(), 0.1)
     theoretical_cdf = genpareto_fit.cdf(x_values)
-
     sns.lineplot(x=exceedence_values_sorted_ascending, y=empirical_cdf, label="empirical CDF")
     threshold = x_values + exceedances_threshold
     sns.lineplot(x=threshold, y=theoretical_cdf, label="theoretical CDF")
@@ -67,43 +57,34 @@ def plot_genpareto(standard_scores, genpareto_fit, n_exceedances, label):
     plt.legend()
     plt.show()
 
-
 def plot_pdf_over_maf(genpareto_distributions, statistics, maf_bins):
     # Every genpareto distribution starts at a different threshold
     x_values = np.arange(0,
                          np.concatenate(statistics.values()).max(), 0.1)
     dataframe_dict = dict()
-
     for maf_bin, (genpareto_fit, n_exceedances) in genpareto_distributions.items():
         # First calculate the exceedances threshold.
         abs_standard_scores_ordered = np.sort(np.abs(statistics[maf_bin]))[::-1]
         print(maf_bin)
         print(abs_standard_scores_ordered[n_exceedances - 1])
         print(abs_standard_scores_ordered[n_exceedances])
-
         # Calculate the threshold value
         exceedances_threshold = (
             abs_standard_scores_ordered[n_exceedances - 1]
             + abs_standard_scores_ordered[n_exceedances]) / 2
-
         density_function = genpareto_fit.pdf(x_values - exceedances_threshold)
         dataframe_dict[maf_bin] = pd.DataFrame({
             "x": x_values,
             "y": density_function})
-
     concatenated = pd.concat(
         dataframe_dict.values(),
         keys=dataframe_dict.keys()).rename_axis(['maf', 'i']).reset_index()
-
     concatenated["maf"] = pd.Categorical(concatenated["maf"],
                                          categories=maf_bins, ordered=True)
-
     ax = sns.lineplot(x='x', y='y', hue='maf', data=concatenated,
                       palette="viridis", hue_order=maf_bins)
     ax.set(ylim=(0, 0.1))
     plt.show()
-
-
 class PermutationPvalueEstimator:
     def __init__(self, test_stat, anderson_darling_table):
         self.perm_stat = "perm_test_stat"
@@ -111,12 +92,10 @@ class PermutationPvalueEstimator:
         self.n_exceedances = None
         self.anderson_darling_table = anderson_darling_table
         self.test_stat = test_stat
-
     def fit_permutations(self, permutation_results):
         self.gpd_fit, self.n_exceedances = (
             self.fit_distribution(permutation_results[self.test_stat],
                                   self.anderson_darling_table))
-
     def fit_distribution(self, test_statistics, anderson_darling_table,
                          n_exceedances_init=250):
         # Compute the permutation p-value using the
@@ -126,137 +105,104 @@ class PermutationPvalueEstimator:
             abs_standard_scores_ordered,
             n_exceedances_init,
             anderson_darling_table)
-
     def _fit_distribution(self, abs_standard_scores_ordered,
                           n_exceedances, anderson_darling_table):
-
         # Calculate the threshold value
         exceedances_threshold = (
             abs_standard_scores_ordered[n_exceedances - 1]
             + abs_standard_scores_ordered[n_exceedances]) / 2
-
         # Calculate the z argument for the generalized pareto distribution
         exceedence_values_sorted_ascending = np.sort(
             abs_standard_scores_ordered[(abs_standard_scores_ordered > exceedances_threshold)])
         z_test_statistics_for_fit = (
                 exceedence_values_sorted_ascending
                 - exceedances_threshold)
-
         # Fit the generalized pareto distribution
         fitted_parameters = genpareto.fit(z_test_statistics_for_fit)
-
         # Generate the probability density function
         genpareto_dist = genpareto(c=fitted_parameters[0],
                                    loc=fitted_parameters[1],
                                    scale=fitted_parameters[2])
-
         ad_statistic, crit_values, pvalues = anderson_darling_gpd(
             z_test_statistics_for_fit, genpareto_dist,
             fitted_parameters[0], anderson_darling_table)
-
         goodness_of_fit_pval = (pvalues[ad_statistic >= crit_values]).min(initial=1)
-
+        print(n_exceedances, goodness_of_fit_pval)
         if goodness_of_fit_pval <= 0.05 and n_exceedances >= 10:
             return self._fit_distribution(
                 abs_standard_scores_ordered, n_exceedances - 10,
                 anderson_darling_table)
-
         elif goodness_of_fit_pval > 0.05:
             return genpareto_dist, n_exceedances
         else:
             return None, 0
-
     def estimate_pvalues(self,
                          permutation_results,
                          empirical_results):
-
         # Get the permuted dataframe for this maf bin
         permutation_data = (
-            permutation_results.iloc[:, np.array([self.test_stat])]
+            permutation_results.loc[:, np.array([self.test_stat])]
             .rename(columns={self.test_stat: self.perm_stat})
-            .sort_values(by=[self.test_stat]))
-
+            .sort_values(by=[self.perm_stat]))
+        empirical_data = empirical_results.sort_values(by=[self.test_stat])
         # Exceedances threshold
         exceedances_threshold = (
-                (permutation_data[self.test_stat].iloc[-self.n_exceedances]
-                 + permutation_data[self.test_stat].iloc[-(self.n_exceedances + 1)])
+                (permutation_data[self.perm_stat].iloc[-self.n_exceedances]
+                 + permutation_data[self.perm_stat].iloc[-(self.n_exceedances + 1)])
                 / 2)
-
         # Get the number of permuted values
         n_permuted = float(permutation_data.shape[0])
-
         # Compute M
         permutation_data['M'] = (
-            permutation_data[self.test_stat].rank(ascending=False))
-
+            permutation_data[self.perm_stat].rank(ascending=False))
         pvalue_dataframe_bin = pd.merge_asof(
-            empirical_results,
+            empirical_data,
             permutation_data,
             left_on=self.test_stat, right_on=self.perm_stat,
             direction="forward"
         )
-
         pvalue_dataframe_bin.loc[pvalue_dataframe_bin['M'].isna(), 'M'] = 0
-
         # Compute P'ecdf for all empirical results
         pvalue_dataframe_bin['P_ecdf'] = (
                 pvalue_dataframe_bin['M'] / n_permuted)
-
         pvalue_dataframe_bin['P_ecdf_pseudocount'] = (
                 (pvalue_dataframe_bin['M'] + 1) / n_permuted)
-
         # For those empirical results that have an M < 10
         pvalue_dataframe_bin['P_gpd'] = -1
-
         # Select rows for which we can use the GPD
         gpd_rows = (pvalue_dataframe_bin['M'] < 10)
-
         # Get the generalized pareto distribution pdf for the rows
         # that are applicable for the GPD
         gpd_cdf = self.gpd_fit.cdf(
             pvalue_dataframe_bin.loc[gpd_rows, self.test_stat]
             - exceedances_threshold)
-
         # calculate the accurate permuted p-value
         pvalue_dataframe_bin.loc[gpd_rows, 'P_gpd'] = (
                 self.n_exceedances / float(n_permuted) * (1 - gpd_cdf))
-
         pvalue_dataframe_bin['P_accurate'] = (
             pvalue_dataframe_bin['P_ecdf']
         )
-
         pvalue_dataframe_bin.loc[gpd_rows, 'P_accurate'] = (
             pvalue_dataframe_bin.loc[gpd_rows, 'P_gpd']
         )
-
         return pvalue_dataframe_bin
-
-
 def estimate_pvalues_over_maf_bins(
         empirical_results, permutation_results, maf_bins, pval_estimator):
-
     pval_estimators = dict()
     accurate_pvalue_estimations_list = list()
-
     for maf_bin in maf_bins:
         # Get variants of interest
         permutation_results_bin = permutation_results.loc[
             permutation_results["MAF_BIN"] == maf_bin]
         empirical_results_bin = empirical_results.loc[
             empirical_results["MAF_BIN"] == maf_bin]
-
         pval_estimator.fit_permutations(
             permutation_results_bin)
         accurate_pvalue_estimations_list.append(pval_estimator.estimate_pvalues(
             permutation_results_bin, empirical_results_bin))
-
         pval_estimators[maf_bin] = pval_estimator
-
     accurate_pvalue_estimations = pd.concat(accurate_pvalue_estimations_list)
-
     return(accurate_pvalue_estimations)
-
-
 def plot_accurate_pvalues(accurate_pvalue_estimations, output_prefix):
     # ax = sns.countplot(accurate_pvalue_estimations["MAF_BIN"])
     # ax.tick_params(axis='x', rotation=90)
@@ -276,21 +222,16 @@ def plot_accurate_pvalues(accurate_pvalue_estimations, output_prefix):
         accurate_pvalue_estimations["Pemp"])
     accurate_pvalue_estimations["MAF_BIN_I"] = \
         accurate_pvalue_estimations["MAF_BIN"].cat.codes
-
     # In theory, the smaller the MAF, the further the tail should reach.
-
     grid = sns.FacetGrid(accurate_pvalue_estimations,
                          col="MAF_BIN_I", col_wrap=4)
-
     grid.map(sns.scatterplot, "P_emp_log10", "P_accurate_log10",
              marker=".", alpha=0.5, linewidth=0)
     grid.fig.tight_layout(w_pad=1)
-
     grid.set(
         xlabel="empirical p-values (-log10 transformed)",
         ylabel="accurate perm p-values (-log10 transformed)")
     plt.savefig("{}.empirical_pval_panels.png".format(output_prefix))
-
     comb = sns.scatterplot(
         data=accurate_pvalue_estimations,
         x="P_emp_log10", y="P_accurate_log10",
@@ -302,18 +243,13 @@ def plot_accurate_pvalues(accurate_pvalue_estimations, output_prefix):
     comb.set(
         xlabel="empirical p-values (-log10 transformed)",
         ylabel="accurate perm p-values (-log10 transformed)")
-
     comb.get_legend().remove()
     comb.figure.colorbar(color_mapping)
-
     plt.savefig("{}.empirical_pval_overlaid.png".format(output_prefix))
-
     grid = sns.FacetGrid(accurate_pvalue_estimations, col="MAF_BIN", col_wrap=5)
-
     grid.map(sns.scatterplot, "P_ecdf_psdoc_log10", "P_accurate_log10",
              marker=".", alpha=0.5, linewidth=0)
     grid.fig.tight_layout(w_pad=1)
-
     grid.set(
         xlabel="ecdf p-values (with psdoc; -log10 transformed)",
         ylabel="accurate perm p-values (-log10 transformed)")
@@ -372,7 +308,8 @@ def main(argv=None):
 
     # Load data
     print("Loading Empirical results...")
-    empirical_results = pd.read_csv(args.emp, sep="\t")
+    empirical_results = pd.read_pickle(args.emp)
+    #empirical_results = pd.read_csv(args.emp, sep="\t")
     print("Empirical results loaded!")
     empirical_results[test_stat] = (
         empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
@@ -384,7 +321,8 @@ def main(argv=None):
     print("Merging done!")
 
     print("Loading permutation results...")
-    permutation_results = pd.read_csv(args.perm, sep="\t")
+    #permutation_results = pd.read_csv(args.perm, sep="\t")
+    permutation_results = pd.read_pickle(args.emp)
     print("Permutation results loaded!")
     print("Merging minor allele frequency table...")
     permutation_results = permutation_results.merge(

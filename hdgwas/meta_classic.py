@@ -18,8 +18,14 @@ class HaseException(Exception):
 
 class ClassicMetaAnalyser:
     def __init__(self, meta_phen, meta_pard, sample_intersection, sample_indices, study_names, out,
-                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None):
+                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None, 
+                 variants_full_log=None,
+                 pheno_full_log=None):
 
+        self.pheno_full_log = (
+            pheno_full_log if pheno_full_log is not None else np.array([]))
+        self.variants_full_log = (
+            variants_full_log if variants_full_log is not None else np.array([]))
         self.t_statistic_threshold = t_statistic_threshold
         self.meta_pard = meta_pard
         self.meta_phen = meta_phen
@@ -89,6 +95,9 @@ class ClassicMetaAnalyser:
             # Now do the classic meta-analysis
             self.meta_analyse(variant_names, phenotype_names)
             self.save_results(chunk=chunk, node=node)
+            self.save_results_per_cohort(
+                variant_names, phenotype_names,
+                chunk=chunk, node=node)
             if self._debug:
                 self.write_debug()
 
@@ -139,6 +148,7 @@ class ClassicMetaAnalyser:
         # 2nd dimension represents the phenotypes.
         effect_sizes = self.get_effect_sizes()
         standard_error = self.get_standard_error()
+
         # Missing values are expected to be NaN
         # We should check which phenotype, variant combinations are NaN in all
         # cohorts. Then we can remove these from the variant and phenotype names
@@ -195,7 +205,8 @@ class ClassicMetaAnalyser:
                  / effect_size_deviations
                  ) * 100)
 
-        meta_analysis_sample_sizes = self.get_sample_sizes()[not_all_nan]
+        meta_analysis_sample_sizes = np.nansum(
+            self.get_sample_sizes(), axis=0)[not_all_nan]
 
         self.set_results(meta_analysed_effect_sizes,
                          meta_analysed_standard_error,
@@ -261,16 +272,80 @@ class ClassicMetaAnalyser:
         self.results_index += 1
         self.results = None
 
-    def get_output_path(self, chunk, node):
+    def save_results_per_cohort(
+            self, variant_names, phenotype_names, chunk=None, node=None):
+
+        print('Saving results to {}'.format(self.out))
+
+        variant_selection = np.isin(variant_names, self.variants_full_log)
+        phenotype_selection = np.isin(phenotype_names, self.pheno_full_log)
+
+        # We rely on the methods below to return a 3d matrix wherein the
+        # 0th dimension represents the studies / cohorts, the
+        # 1st dimension represents the variants, and the
+        # 2nd dimension represents the phenotypes.
+        effects_to_report = np.dot(
+            variant_selection[:, None],
+            phenotype_selection[None, :])
+
+        if not np.any(effects_to_report):
+            return
+
+        effect_sizes = (
+            self.get_effect_sizes()[:, effects_to_report])
+        standard_error = (
+            self.get_standard_error()[:, effects_to_report])
+        sample_sizes = (
+            self.get_sample_sizes()[:, effects_to_report])
+
+        variant_phenotype_multiindex = pd.MultiIndex.from_arrays(
+            [np.repeat(variant_names[variant_selection], repeats=phenotype_selection.sum()),
+             np.tile(phenotype_names[phenotype_selection], reps=variant_selection.sum())])
+
+        results_per_cohort = pd.concat([
+            pd.DataFrame(
+                statistic,
+                index=self.get_cohort_names(),
+                columns=variant_phenotype_multiindex).stack([0,1])
+            for statistic in [effect_sizes, standard_error, sample_sizes]],
+            axis=1, keys=["beta", "standard_error", "sample_size"])
+
+        results_per_cohort.index = (results_per_cohort.index
+            .set_names(['cohort', 'variant', 'phenotype']))
+
+        results_per_cohort = results_per_cohort.reset_index()
+
+        output_path = self.get_output_path(chunk, node, per_cohort=True)
+
+        if self.output_type == "npy":
+            np.save(output_path, results_per_cohort)
+        elif self.output_type == "pkl":
+            results_per_cohort.to_pickle(output_path)
+        elif self.output_type == "parquet":
+
+            pyarrow_schema = pa.schema(
+                [("cohort", pa.string()),
+                 ("variant", pa.string()),
+                 ("phenotype", pa.string()),
+                 ("beta", pa.float64()),
+                 ("standard_error", pa.float64()),
+                 ("sample_size", pa.float64())])
+
+            pq.write_table(pa.Table.from_pandas(
+                results_per_cohort, pyarrow_schema), output_path)
+
+    def get_output_path(self, chunk, node, per_cohort=False):
         if chunk is None:
             output_path = os.path.join(
                 self.out,
-                str(self.results_index) + 'result.' + self.output_type)
+                str(self.results_index)
+                + ('per_cohort.' if per_cohort else 'result.')
+                + self.output_type)
         else:
             output_path = os.path.join(
                 self.out,
                 "_".join(['node', str(node), str(chunk[0]), str(chunk[1]), str(self.results_index),
-                          'result.' + self.output_type]))
+                          ('per_cohort.' if per_cohort else 'result.') + self.output_type]))
         return output_path
 
     def get_effect_sizes(self):
@@ -299,7 +374,10 @@ class ClassicMetaAnalyser:
         return standard_errors
 
     def get_sample_sizes(self):
-        return np.nansum(np.stack([cohort.get_sample_sizes() for cohort in self.cohort_list]), axis=0)
+        return np.stack([cohort.get_sample_sizes() for cohort in self.cohort_list])
+
+    def get_cohort_names(self):
+        return [cohort.study_name for cohort in self.cohort_list]
 
 
 class CohortAnalyser:

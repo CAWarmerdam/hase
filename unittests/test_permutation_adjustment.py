@@ -3,13 +3,13 @@ from __future__ import print_function
 import argparse
 import sys
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
+#import seaborn as sns
 from scipy.stats import genpareto
 
-sns.set_style(style="ticks")
+#sns.set_style(style="ticks")
 
 
 def anderson_darling_gpd(sorted_values, genpareto_dist, genpareto_shape, table):

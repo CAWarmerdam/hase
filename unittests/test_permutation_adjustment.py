@@ -289,7 +289,7 @@ def main(argv=None):
 
     # Load unrelated variants (labeled by maf bin)
     uncorrelated_variants = pd.read_csv(
-        args.variants, sep=" ")
+        args.variants, sep=" ", header=None, names=["SNP", "MAF_BIN"])
 
     # Breakpoints
     breakpoints = np.insert(
@@ -302,7 +302,10 @@ def main(argv=None):
 
     test_stat = "test_stat"
 
-    maf_table = pd.read_csv(args.maf, sep="\t")
+    maf_table_all = pd.read_csv(args.maf, sep="\t")
+    maf_table = maf_table_all.merge(
+        uncorrelated_variants, how="inner", on="SNP")
+
     maf_table["MAF"] = np.minimum(maf_table["AF"], 1 - maf_table["AF"])
     maf_table["MAF_BIN"] = pd.cut(
         maf_table["MAF"], breakpoints,
@@ -335,11 +338,6 @@ def main(argv=None):
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     permutation_results[test_stat] = (
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
-
-    # Make add maf bin designation to uncorrelated variants
-    uncorrelated_variants["MAF_BIN"] = pd.Categorical(
-        uncorrelated_variants["MAF_BIN"], categories=maf_bins,
-        ordered=True)
 
     pval_estimator = PermutationPvalueEstimator(
         test_stat, anderson_darling_table)

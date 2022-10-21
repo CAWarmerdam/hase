@@ -224,11 +224,10 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         # Get common ids
         row_index, intersecting_identifiers = get_intersecting_individual_indices(datasets)
 
-        classic_meta_analyser = meta_classic.ClassicMetaAnalyser(
-            meta_phen, meta_pard, intersecting_identifiers,
-            row_index, self.hase_executor.study_names,
-            self.hase_executor.results_directory, maf_threshold=0.05,
-            t_statistic_threshold=0)
+        classic_meta_analyser = meta_classic.ClassicMetaAnalyser(meta_phen, meta_pard, intersecting_identifiers,
+                                                                 row_index, self.hase_executor.study_names,
+                                                                 self.hase_executor.results_directory,
+                                                                 maf_threshold=0.05, t_statistic_threshold=0)
 
         variant_indices, keys = mapper.get(
             allow_missingness=allow_missingness)
@@ -261,6 +260,86 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
             self.compare_actual_matrix_to_expected(
                 actual_betas, expected_betas[required_phenotype_names])
+
+    def test_per_cohort_results(self):
+        allow_missingness = True
+
+        mapper = load_mapper(
+            mapper_chunk_size=200, study_name=self.hase_executor.study_names,
+            ref_name=self.hase_executor.ref_name,
+            mapper_folder=self.hase_executor.get_meta_mapper_folder(),
+            encoded=[1] * len(self.hase_executor.study_names),
+            cluster=None, node=None,
+            snp_id_inc=None, snp_id_exc=None)
+
+        gen = []
+        for i, j in enumerate(self.hase_executor.run_func_all_studies(
+                self.hase_executor.get_meta_genotype_folder)):
+            gen.append(Reader('genotype'))
+            gen[i].start(j, hdf5=True, study_name=self.hase_executor.study_names[i], ID=False)
+
+        variants_of_interest = np.array(["rs79067516", "21-24257984"])
+        phenotypes_of_interest = np.array(["pheno_13", "pheno_09"])
+
+        classic_meta_analyser = self.construct_classic_meta_analyser(
+            allow_missingness, gen, variants_of_interest, phenotypes_of_interest)
+
+        variant_indices, variant_names = mapper.get(
+            allow_missingness=allow_missingness)
+        genotype = merge_genotype(gen, variant_indices, mapper)
+
+        classic_meta_analyser.prepare_cohorts(
+            variant_indices, variant_names)
+
+        for phenotype, phenotype_names, phenotype_indices in classic_meta_analyser.meta_phen:
+
+            for cohort in classic_meta_analyser.cohort_list:
+                # Now we need to do the analysis with the selected
+                # phenotypes and genotypes
+                cohort.set_phenotype_names(phenotype_names)
+                cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
+                cohort.analyse(genotype, phenotype)
+
+            # Now do the classic meta-analysis
+            classic_meta_analyser.save_results_per_cohort(
+                variant_names, phenotype_names,
+                chunk=None, node=None)
+
+    def construct_classic_meta_analyser(self, allow_missingness, gen,
+                                        variants_of_interest = None,
+                                        phenotypes_of_interest = None):
+        partial_derivatives_folders = []
+        for i, j in enumerate(self.hase_executor.run_func_all_studies(
+                self.hase_executor.get_partial_derivatives_meta_folder)):
+            partial_derivatives_folders.append(Reader('partial'))
+            partial_derivatives_folders[i].start(j, study_name=self.hase_executor.study_names[i])
+            partial_derivatives_folders[i].folder.load()
+        meta_pard = MetaParData(partial_derivatives_folders, self.hase_executor.study_names,
+                                protocol=None,
+                                allow_missingness=allow_missingness)
+        phen = []
+        for i, j in enumerate(self.hase_executor.run_func_all_studies(
+                self.hase_executor.get_meta_phenotype_folder)):
+            phen.append(Reader('phenotype'))
+            phen[i].start(j)
+        meta_phen = MetaPhenotype(phen,
+                                  include=None, exclude=None, allow_missingness=allow_missingness)
+        meta_phen.chunk_size = 5
+
+        # Create a dictionary with the datasets for obtaining
+        # the indices of shared identifiers
+        datasets = {"phenotype": tuple(i.folder._data for i in phen),
+                    "genotype": tuple(i.folder._data for i in gen),
+                    "partial_derivatives": tuple(i.folder._data.metadata for i in partial_derivatives_folders)}
+        # Get common ids
+        row_index, intersecting_identifiers = get_intersecting_individual_indices(datasets)
+        classic_meta_analyser = meta_classic.ClassicMetaAnalyser(meta_phen, meta_pard, intersecting_identifiers,
+                                                                 row_index, self.hase_executor.study_names,
+                                                                 self.hase_executor.results_directory,
+                                                                 variants_full_log=variants_of_interest,
+                                                                 pheno_full_log=phenotypes_of_interest,
+                                                                 maf_threshold=0.05, t_statistic_threshold=0)
+        return classic_meta_analyser
 
     def compare_actual_matrix_to_expected(self, actual_data_frame, expected_data_frame):
         self.assertTrue(np.all(np.isin(
@@ -318,8 +397,8 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                 delimiter="\t"))
 
         # Load actual results
-        file_names_pkl = glob.glob(os.path.join(self.hase_executor.results_directory, "*.pkl"))
-        file_names_parquet = glob.glob(os.path.join(self.hase_executor.results_directory, "*.parquet"))
+        file_names_pkl = glob.glob(os.path.join(self.hase_executor.results_directory, "*result.pkl"))
+        file_names_parquet = glob.glob(os.path.join(self.hase_executor.results_directory, "*result.parquet"))
 
         if len(file_names_parquet) > 0:
             actual_results = pd.concat([pq.read_table(f).to_pandas() for f in file_names_parquet])

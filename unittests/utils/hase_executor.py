@@ -24,6 +24,8 @@ class HaseExecutor:
         self.test_dir = working_dir
         self.ref_name = "1000Gp1v3_ref"
         self.results_directory = os.path.join(self.test_dir, "results")
+        self.phenotype_ids_logging_path = None
+        self.variant_ids_logging_path = None
 
         assert os.path.isfile(
             os.path.join(self.project_root, "data", "1000Gp1v3.ref.gz"))
@@ -163,6 +165,8 @@ class HaseExecutor:
                             ["-mapper_chunk", "500"],
                             ["-mode", mode],
                             ["-allow_missingness"],
+                            ["-snp_id_log", self.variant_ids_logging_path],
+                            ["-ph_id_log", self.phenotype_ids_logging_path],
                             ["-th", "0"],
                             ["-maf", "0.05"]]
         covariate_indices_path = self.get_covariate_indices_path()
@@ -190,6 +194,11 @@ class HaseExecutor:
         return False not in path_presence_list
 
     def meta_analyse(self, data_dir):
+        self.variant_ids_logging_path = os.path.join(
+            data_dir, "variant_ids_per_cohort.txt")
+        self.phenotype_ids_logging_path = os.path.join(
+            data_dir, "phenotype_ids_per_cohort.txt")
+
         for cohort_name in self.study_names:
             if not self.per_cohort_results_exist(cohort_name):
                 self.per_cohort_analysis(data_dir, cohort_name)

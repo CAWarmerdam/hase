@@ -96,16 +96,26 @@ def main(argv=None):
     # ADDITIONAL SETTINGS
     parser.add_argument(
         "-snp_id_inc", type=str, nargs='+',
-        help="path to file with SNPs id to include to analysis")
+        help="path to file with SNPs id to include in analysis")
     parser.add_argument(
         "-snp_id_exc", type=str, nargs='+',
         help="path to file with SNPs id to exclude from analysis")
     parser.add_argument(
         "-ph_id_inc", type=str, nargs='+',
-        help="path to file with phenotype id to exclude from analysis")
+        help="path to file with phenotype id to include in analysis")
     parser.add_argument(
         "-ph_id_exc", type=str, nargs='+',
         help="path to file with phenotype id to exclude from analysis")
+
+    # Logging of per-cohort results
+    parser.add_argument(
+        "-snp_id_log", type=str, nargs='+',
+        help="path to file with SNP ids for which to log per-cohort results."
+             "Only used with classic meta-analysis")
+    parser.add_argument(
+        "-ph_id_log", type=str, nargs='+',
+        help="path to file with phenotype ids for which to log per-cohort results."
+             "Only used with classic meta-analysis")
 
     # parser.add_argument("-ind_id_inc", type=str, help="path to file with individuals id to include to analysis") #TODO (low)
     # parser.add_argument("-ind_id_exc", type=str, help="path to file with individuals id to exclude from analysis")#TODO (low)
@@ -747,9 +757,17 @@ def main(argv=None):
 
                 covariate_indices[key] = np.array(indices).astype(int)
 
+        variants_to_log = None
+        pheno_to_log = None
+        if args.snp_id_log is not None:
+            variants_to_log = Mapper.load_variant_filter_dataframes(args.snp_id_log, (("ID",),))
+        if args.ph_id_log is not None:
+            pheno_to_log = Mapper.load_variant_filter_dataframes(args.ph_id_log, (("ID",),))
+
         classic_meta_analyser = ClassicMetaAnalyser(
             meta_phen, meta_pard, intersecting_identifiers, row_index,
             args.study_name, args.out,
+            variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
             covariate_indices=covariate_indices, maf_threshold=args.maf,
             t_statistic_threshold=args.thr)
 

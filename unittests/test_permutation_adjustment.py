@@ -85,6 +85,7 @@ def plot_pdf_over_maf(genpareto_distributions, statistics, maf_bins):
                       palette="viridis", hue_order=maf_bins)
     ax.set(ylim=(0, 0.1))
     plt.show()
+
 class PermutationPvalueEstimator:
     def __init__(self, test_stat, anderson_darling_table):
         self.perm_stat = "perm_test_stat"
@@ -186,6 +187,7 @@ class PermutationPvalueEstimator:
             pvalue_dataframe_bin.loc[gpd_rows, 'P_gpd']
         )
         return pvalue_dataframe_bin
+
 def estimate_pvalues_over_maf_bins(
         empirical_results, permutation_results, maf_bins, pval_estimator):
     pval_estimators = dict()
@@ -203,6 +205,7 @@ def estimate_pvalues_over_maf_bins(
         pval_estimators[maf_bin] = pval_estimator
     accurate_pvalue_estimations = pd.concat(accurate_pvalue_estimations_list)
     return(accurate_pvalue_estimations)
+
 def plot_accurate_pvalues(accurate_pvalue_estimations, output_prefix):
     # ax = sns.countplot(accurate_pvalue_estimations["MAF_BIN"])
     # ax.tick_params(axis='x', rotation=90)
@@ -286,7 +289,7 @@ def main(argv=None):
 
     # Load unrelated variants (labeled by maf bin)
     uncorrelated_variants = pd.read_csv(
-        args.variants, sep=" ")
+        args.variants, sep=" ", header=None, names=["SNP", "MAF_BIN"])
 
     # Breakpoints
     breakpoints = np.insert(
@@ -299,7 +302,10 @@ def main(argv=None):
 
     test_stat = "test_stat"
 
-    maf_table = pd.read_csv(args.maf, sep="\t")
+    maf_table_all = pd.read_csv(args.maf, sep="\t")
+    maf_table = maf_table_all.merge(
+        uncorrelated_variants, how="inner", on="SNP")
+
     maf_table["MAF"] = np.minimum(maf_table["AF"], 1 - maf_table["AF"])
     maf_table["MAF_BIN"] = pd.cut(
         maf_table["MAF"], breakpoints,
@@ -308,7 +314,7 @@ def main(argv=None):
 
     # Load data
     print("Loading Empirical results...")
-    empirical_results = pd.read_pickle(args.emp)
+    empirical_results = pd.read_pickle("empirical_dataset_examplegene.pkl")
     #empirical_results = pd.read_csv(args.emp, sep="\t")
     print("Empirical results loaded!")
     empirical_results[test_stat] = (
@@ -322,7 +328,7 @@ def main(argv=None):
 
     print("Loading permutation results...")
     #permutation_results = pd.read_csv(args.perm, sep="\t")
-    permutation_results = pd.read_pickle(args.emp)
+    permutation_results = pd.read_pickle("permutation_dataset_examplegene.pkl")
     print("Permutation results loaded!")
     print("Merging minor allele frequency table...")
     permutation_results = permutation_results.merge(
@@ -332,11 +338,6 @@ def main(argv=None):
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     permutation_results[test_stat] = (
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
-
-    # Make add maf bin designation to uncorrelated variants
-    uncorrelated_variants["MAF_BIN"] = pd.Categorical(
-        uncorrelated_variants["MAF_BIN"], categories=maf_bins,
-        ordered=True)
 
     pval_estimator = PermutationPvalueEstimator(
         test_stat, anderson_darling_table)

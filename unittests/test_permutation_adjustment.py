@@ -187,6 +187,8 @@ class PermutationPvalueEstimator:
         pvalue_dataframe_bin.loc[gpd_rows, 'P_accurate'] = (
             pvalue_dataframe_bin.loc[gpd_rows, 'P_gpd']
         )
+        print(pvalue_dataframe_bin)
+        print(pvalue_dataframe_bin.columns)
         return pvalue_dataframe_bin
 
 def estimate_pvalues_over_maf_bins(
@@ -317,7 +319,7 @@ def main(argv=None):
         right=True, include_lowest=True,
         labels=maf_bins)
 
-    print(maf_table)
+    print(maf_table.columns)
     print(maf_table.shape)
 
     # Load data
@@ -334,6 +336,8 @@ def main(argv=None):
         maf_table, how="inner", left_on="SNP", right_on="ID")
     print("Merging done!")
 
+    print(empirical_results.columns)
+
     print("Loading permutation results...")
     permutation_results = pd.read_csv(args.perm, sep="\t")
     #permutation_results = pd.read_pickle("permutation_dataset_examplegene.pkl")
@@ -346,6 +350,8 @@ def main(argv=None):
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     permutation_results[test_stat] = (
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
+
+    print(permutation_results.columns)
 
     pval_estimator = PermutationPvalueEstimator(
         test_stat, anderson_darling_table)

@@ -274,7 +274,7 @@ def main(argv=None):
                         help="File with empirical association statistics")
     parser.add_argument("--perm",
                         help="File with permutation association statistics")
-    parser.add_argument("--maf",
+    parser.add_argument("--maf", type=str,
                         help="File with minor allele frequencies")
     parser.add_argument("--breakpoints",
                         help="File with breakpoints for maf bins")

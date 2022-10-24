@@ -307,7 +307,7 @@ def main(argv=None):
 
     maf_table_all = pd.read_csv(args.maf, sep="\t")
     maf_table = maf_table_all.merge(
-        uncorrelated_variants, how="inner", on="SNP")
+        uncorrelated_variants, how="inner", left_on="ID", right_on="SNP")
 
     maf_table["MAF"] = np.minimum(maf_table["AF"], 1 - maf_table["AF"])
     maf_table["MAF_BIN"] = pd.cut(

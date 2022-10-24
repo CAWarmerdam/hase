@@ -304,7 +304,7 @@ def main(argv=None):
 
     test_stat = "test_stat"
 
-    maf_table_all = pd.read_csv(args.maf, sep="\t")
+    maf_table_all = pd.read_csv(args.maf, sep="\t", compression='gzip')
     maf_table = maf_table_all.merge(
         uncorrelated_variants, how="inner", on="SNP")
 

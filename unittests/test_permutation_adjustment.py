@@ -283,6 +283,8 @@ def main(argv=None):
     # Parse args
     args = parser.parse_args(argv[1:])
 
+    print(args)
+
     # Load the anderson-darling table
     anderson_darling_table = (
         pd.read_csv(args.anderson_darling_path).iloc[1::2, :])

@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import argparse
+import os
 import sys
 
 #import matplotlib.pyplot as plt
@@ -303,6 +304,7 @@ def main(argv=None):
         for i in range(len(breakpoints) - 1)]
 
     test_stat = "test_stat"
+    print(os.path.isfile(args.maf))
 
     maf_table_all = pd.read_csv(args.maf, sep="\t", compression='gzip')
     maf_table = maf_table_all.merge(

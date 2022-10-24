@@ -280,6 +280,8 @@ def main(argv=None):
                         help="File with breakpoints for maf bins")
     parser.add_argument("--variants",
                         help="File with uncorrelated variants per maf bin")
+    parser.add_argument("--output-prefix",
+                        help="output prefix to write files to")
 
     # Parse args
     args = parser.parse_args(argv[1:])

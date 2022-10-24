@@ -319,8 +319,8 @@ def main(argv=None):
 
     # Load data
     print("Loading Empirical results...")
-    empirical_results = pd.read_pickle("empirical_dataset_examplegene.pkl")
-    #empirical_results = pd.read_csv(args.emp, sep="\t")
+    #empirical_results = pd.read_pickle("empirical_dataset_examplegene.pkl")
+    empirical_results = pd.read_csv(args.emp, sep="\t")
     print("Empirical results loaded!")
     empirical_results[test_stat] = (
         empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
@@ -332,8 +332,8 @@ def main(argv=None):
     print("Merging done!")
 
     print("Loading permutation results...")
-    #permutation_results = pd.read_csv(args.perm, sep="\t")
-    permutation_results = pd.read_pickle("permutation_dataset_examplegene.pkl")
+    permutation_results = pd.read_csv(args.perm, sep="\t")
+    #permutation_results = pd.read_pickle("permutation_dataset_examplegene.pkl")
     print("Permutation results loaded!")
     print("Merging minor allele frequency table...")
     permutation_results = permutation_results.merge(

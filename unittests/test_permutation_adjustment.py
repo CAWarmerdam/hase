@@ -317,6 +317,9 @@ def main(argv=None):
         right=True, include_lowest=True,
         labels=maf_bins)
 
+    print(maf_table)
+    print(maf_table.shape)
+
     # Load data
     print("Loading Empirical results...")
     #empirical_results = pd.read_pickle("empirical_dataset_examplegene.pkl")

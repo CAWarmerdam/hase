@@ -318,6 +318,7 @@ def main(argv=None):
         maf_table["MAF"], breakpoints,
         right=True, include_lowest=True,
         labels=maf_bins)
+    maf_table = maf_table[["SNP", "MAF", "MAF_BIN"]]
 
     print(maf_table.columns)
     print(maf_table.shape)
@@ -332,8 +333,9 @@ def main(argv=None):
     empirical_results[test_stat] = (
         empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
     print("Merging minor allele frequency table...")
-    empirical_results = empirical_results.merge(
-        maf_table, how="inner", left_on="SNP", right_on="ID")
+    empirical_results = (empirical_results.merge(
+        maf_table, how="inner", left_on="SNP", right_on="SNP")
+        [["phenotype", "SNP", "P", "N" "MAF_BIN", "MAF", test_stat]])
     print("Merging done!")
 
     print(empirical_results.columns)
@@ -342,14 +344,15 @@ def main(argv=None):
     permutation_results = pd.read_csv(args.perm, sep="\t")
     #permutation_results = pd.read_pickle("permutation_dataset_examplegene.pkl")
     print("Permutation results loaded!")
+    permutation_results[test_stat] = (
+        permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
+    permutation_results[test_stat] = (
+        permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     print("Merging minor allele frequency table...")
-    permutation_results = permutation_results.merge(
-        maf_table, how="inner", left_on="SNP", right_on="ID")
+    permutation_results = (permutation_results.merge(
+        maf_table, how="inner", left_on="SNP", right_on="SNP")
+        [["phenotype", "SNP", "P", "N" "MAF_BIN", "MAF", test_stat]])
     print("Merging done!")
-    permutation_results[test_stat] = (
-        permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
-    permutation_results[test_stat] = (
-        permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
 
     print(permutation_results.columns)
 

@@ -304,11 +304,8 @@ def main(argv=None):
         for i in range(len(breakpoints) - 1)]
 
     test_stat = "test_stat"
-    print(type(args.maf))
-    print(os.path.isfile("/gpfs/space/GI/eQTLGen/MetaAnalysisQC/output/CombinedMaf.txt.gz"))
-    print(os.path.isfile(args.maf))
 
-    maf_table_all = pd.read_csv(args.maf, sep="\t", compression='gzip')
+    maf_table_all = pd.read_csv(args.maf, sep="\t")
     maf_table = maf_table_all.merge(
         uncorrelated_variants, how="inner", on="SNP")
 

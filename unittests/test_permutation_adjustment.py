@@ -320,14 +320,22 @@ def main(argv=None):
         labels=maf_bins)
     maf_table = maf_table[["SNP", "MAF", "MAF_BIN"]]
 
-    print(maf_table.columns)
-    print(maf_table.shape)
+    # Check if output path is available
+    output_file_path = "{}.pval_estimations.csv.gz".format(args.output_prefix)
+    if os.path.exists(output_file_path):
+        raise argparse.ArgumentError(
+            args.output_prefix,
+            "There is already output present associated with the supplied prefix.")
 
     # Load data
     print("Loading Empirical results...")
-    #empirical_results = pd.read_pickle("empirical_dataset_examplegene.pkl")
     empirical_results = pd.read_csv(args.emp, sep="\t")
     print("Empirical results loaded!")
+
+    print("Loading permutation results...")
+    permutation_results = pd.read_csv(args.perm, sep="\t")
+    print("Permutation results loaded!")
+
     empirical_results[test_stat] = (
         empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
     empirical_results[test_stat] = (
@@ -338,12 +346,6 @@ def main(argv=None):
         [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
     print("Merging done!")
 
-    print(empirical_results.columns)
-
-    print("Loading permutation results...")
-    permutation_results = pd.read_csv(args.perm, sep="\t")
-    #permutation_results = pd.read_pickle("permutation_dataset_examplegene.pkl")
-    print("Permutation results loaded!")
     permutation_results[test_stat] = (
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     permutation_results[test_stat] = (
@@ -360,6 +362,7 @@ def main(argv=None):
         test_stat, anderson_darling_table)
 
     # Start iterating over genes
+
     write_header = True
     print("Estimating accurate p-values for:")
     phenotypes_to_loop_through = empirical_results["phenotype"].unique()

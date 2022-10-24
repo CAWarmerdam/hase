@@ -335,7 +335,7 @@ def main(argv=None):
     print("Merging minor allele frequency table...")
     empirical_results = (empirical_results.merge(
         maf_table, how="inner", left_on="SNP", right_on="SNP")
-        [["phenotype", "SNP", "P", "N" "MAF_BIN", "MAF", test_stat]])
+        [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
     print("Merging done!")
 
     print(empirical_results.columns)
@@ -351,7 +351,7 @@ def main(argv=None):
     print("Merging minor allele frequency table...")
     permutation_results = (permutation_results.merge(
         maf_table, how="inner", left_on="SNP", right_on="SNP")
-        [["phenotype", "SNP", "P", "N" "MAF_BIN", "MAF", test_stat]])
+        [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
     print("Merging done!")
 
     print(permutation_results.columns)

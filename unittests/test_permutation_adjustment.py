@@ -309,16 +309,16 @@ def main(argv=None):
 
     test_stat = "test_stat"
 
-    maf_table_all = pd.read_csv(args.maf, sep="\t")
-    maf_table = maf_table_all.merge(
-        uncorrelated_variants, how="inner", left_on="ID", right_on="SNP")
-
+    maf_table = pd.read_csv(args.maf, sep="\t")
     maf_table["MAF"] = np.minimum(maf_table["AF"], 1 - maf_table["AF"])
     maf_table["MAF_BIN"] = pd.cut(
         maf_table["MAF"], breakpoints,
         right=True, include_lowest=True,
         labels=maf_bins)
+    maf_table["SNP"] = maf_table["ID"]
     maf_table = maf_table[["SNP", "MAF", "MAF_BIN"]]
+    maf_table_pruned = maf_table.merge(
+        uncorrelated_variants, how="inner", on="SNP")
 
     # Check if output path is available
     output_file_path = "{}.pval_estimations.csv.gz".format(args.output_prefix)
@@ -352,7 +352,7 @@ def main(argv=None):
         permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
     print("Merging minor allele frequency table...")
     permutation_results = (permutation_results.merge(
-        maf_table, how="inner", left_on="SNP", right_on="SNP")
+        maf_table_pruned, how="inner", left_on="SNP", right_on="SNP")
         [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
     print("Merging done!")
 

@@ -304,7 +304,7 @@ def main(argv=None):
         for i in range(len(breakpoints) - 1)]
 
     test_stat = "test_stat"
-    print(args.maf)
+    print(type(args.maf))
     print(os.path.isfile(args.maf))
 
     maf_table_all = pd.read_csv(args.maf, sep="\t", compression='gzip')

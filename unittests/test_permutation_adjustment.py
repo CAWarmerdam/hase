@@ -296,7 +296,7 @@ def main(argv=None):
 
     # Load unrelated variants (labeled by maf bin)
     uncorrelated_variants = pd.read_csv(
-        args.variants, sep=" ", header=None, names=["SNP", "MAF_BIN"])
+        args.variants, sep=" ", header=None, names=["SNP", "MAF_BIN_IDX"])
 
     # Breakpoints
     breakpoints = np.insert(
@@ -318,7 +318,7 @@ def main(argv=None):
     maf_table["SNP"] = maf_table["ID"]
     maf_table = maf_table[["SNP", "MAF", "MAF_BIN"]]
     maf_table_pruned = maf_table.merge(
-        uncorrelated_variants, how="inner", on="SNP")
+        uncorrelated_variants[["SNP"]], how="inner", on="SNP")
 
     # Check if output path is available
     output_file_path = "{}.pval_estimations.csv.gz".format(args.output_prefix)
@@ -336,25 +336,12 @@ def main(argv=None):
     permutation_results = pd.read_csv(args.perm, sep="\t")
     print("Permutation results loaded!")
 
-    empirical_results[test_stat] = (
-        empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
-    empirical_results[test_stat] = (
-        empirical_results["beta"] / empirical_results["se"]).abs().pow(3)
-    print("Merging minor allele frequency table...")
-    empirical_results = (empirical_results.merge(
-        maf_table, how="inner", left_on="SNP", right_on="SNP")
-        [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
-    print("Merging done!")
-
-    permutation_results[test_stat] = (
-        permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
-    permutation_results[test_stat] = (
-        permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
-    print("Merging minor allele frequency table...")
-    permutation_results = (permutation_results.merge(
-        maf_table_pruned, how="inner", left_on="SNP", right_on="SNP")
-        [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
-    print("Merging done!")
+    print("Processing empirical results")
+    empirical_results = process_assocation_results(
+        maf_table, empirical_results, test_stat)
+    print("Processing permutation results")
+    permutation_results = process_assocation_results(
+        maf_table_pruned, permutation_results, test_stat)
 
     print(permutation_results.columns)
 
@@ -390,6 +377,19 @@ def main(argv=None):
         write_header = False
 
     return 0
+
+
+def process_assocation_results(maf_table, permutation_results, test_stat):
+    permutation_results[test_stat] = (
+            permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
+    permutation_results[test_stat] = (
+            permutation_results["beta"] / permutation_results["se"]).abs().pow(3)
+    print("Merging minor allele frequency table...")
+    permutation_results = (permutation_results.merge(
+        maf_table, how="inner", left_on="SNP", right_on="SNP")
+    [["phenotype", "SNP", "P", "N", "MAF_BIN", "MAF", test_stat]])
+    print("Merging done!")
+    return permutation_results
 
 
 if __name__ == "__main__":

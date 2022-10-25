@@ -197,6 +197,8 @@ def estimate_pvalues_over_maf_bins(
     accurate_pvalue_estimations_list = list()
     for maf_bin in maf_bins:
         # Get variants of interest
+        if np.sum(permutation_results["MAF_BIN"] == maf_bin) < 1:
+            continue
         permutation_results_bin = permutation_results.loc[
             permutation_results["MAF_BIN"] == maf_bin]
         empirical_results_bin = empirical_results.loc[

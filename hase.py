@@ -741,7 +741,7 @@ def main(argv=None):
         if args.covariate_indices:
 
             covariate_indices = dict()
-            with open(covariate_indices_path) as opened:
+            with open(args.covariate_indices) as opened:
                 for line in opened:
                     split_line = line.strip().split("\t")
                     covariate_indices[split_line[0]] = (

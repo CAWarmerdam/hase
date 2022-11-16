@@ -557,7 +557,7 @@ class MetaPhenotype(object):
 
 class MetaParData(object):
 
-    def __init__(self, pd, study_names, protocol=None, allow_missingness=False):
+    def __init__(self, pd, study_names, protocol=None, allow_missingness=False, match_covs=True):
         # @timing
         def _check(map, keys, allow_missingness = False):
             values = np.array(map.dic.values())
@@ -591,11 +591,16 @@ class MetaParData(object):
                     self.cov_mapper.fill(self.covariates[k], k.folder.name, reference=False)
                 else:
                     self.phen_mapper.push(k.folder._data.metadata['phenotype'], name=k.folder.name, new_id=allow_missingness)
-                    self.cov_mapper.push(self.covariates[k], name=k.folder.name, new_id=False)
+                    self.cov_mapper.push(self.covariates[k], name=k.folder.name, new_id=allow_missingness)
                 keys.append(k.folder.name)
 
             self.phen_order = _check(self.phen_mapper, keys, allow_missingness)
-            self.cov_order = _check(self.cov_mapper, keys)
+            if match_covs:
+                self.cov_order = _check(self.cov_mapper, keys)
+            else:
+                self.cov_order = {
+                    key: list(range(0, len(self.covariates[self.pd[key]]))) for key in keys
+                }
 
         if protocol is not None:
             if not protocol.enable:

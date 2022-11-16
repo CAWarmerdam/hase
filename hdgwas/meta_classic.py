@@ -228,7 +228,7 @@ class ClassicMetaAnalyser:
 
         t_statistic_mask = np.full((results_dataframe.shape[0]), True)
 
-        if self.t_statistic_threshold != 0:
+        if self.t_statistic_threshold is not None and self.t_statistic_threshold != 0:
             t_statistic_mask = (
                     np.abs(results_dataframe['beta'] / results_dataframe['standard_error'])
                     > self.t_statistic_threshold)

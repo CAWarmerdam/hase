@@ -695,7 +695,9 @@ def main(argv=None):
 
         meta_pard = MetaParData(partial_derivatives_folders, args.study_name,
                                 protocol=protocol,
-                                allow_missingness=args.allow_missingness)
+                                allow_missingness=args.allow_missingness,
+                                match_covs=False)
+        # Do nothing with cov order
 
         is_no_b4_present_in_partial_derivatives = np.sum(b4_presence_per_study) == 0
         if not is_no_b4_present_in_partial_derivatives:

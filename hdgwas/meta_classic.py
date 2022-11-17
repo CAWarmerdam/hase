@@ -238,7 +238,7 @@ class ClassicMetaAnalyser:
         for cohort in self.cohort_list:
             file_path = os.path.join(
                 self.out, "failed", cohort.study_name, "a_singular_{}.txt")
-            for variant_name, a_singular_matrix in cohort.a_singular:
+            for variant_name, a_singular_matrix in cohort.a_singular.items():
                 np.savetxt(
                     file_path.format(variant_name),
                     a_singular_matrix)

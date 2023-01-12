@@ -586,7 +586,7 @@ class Mapper(object):
 
         print ('You loaded values for {} studies and {} test values'.format(self.n_study, self.n_keys))
 
-        if self.include is not None or self.exclude is not None:
+        if self.include is not None or self.exclude is not None or True:
             self.reference = Reference(self.reference_name)
             self.reference.load_index()
 
@@ -891,13 +891,16 @@ class Mapper(object):
 
 class Reference(object):
 
-    def __init__(self, name="1000Gp1v3_ref"):
+    def __init__(self, name="1000Gp1v3_ref", path=None):
         self.name = name
-        self.path_default = os.path.join(os.environ['HASEDIR'], 'data')
+        if path is None:
+            self.path_default = os.path.join(os.environ['HASEDIR'], 'data')
+        else:
+            self.path_default=path
         self.path = {
             self.name: {
-                'table': os.path.join(os.environ['HASEDIR'], 'data', '{}.ref.gz'.format(self.name.rstrip("_ref"))),
-                'index': os.path.join(os.environ['HASEDIR'], 'data', '{}.ref_info.h5'.format(self.name.rstrip("_ref")))}
+                'table': os.path.join(self.path_default, '{}.ref.gz'.format(self.name.rstrip("_ref"))),
+                'index': os.path.join(self.path_default, '{}.ref_info.h5'.format(self.name.rstrip("_ref")))}
         }
         self.dataframe = None
         self.loaded = False

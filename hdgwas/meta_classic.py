@@ -232,12 +232,15 @@ class ClassicMetaAnalyser:
             t_statistic_mask = (
                     np.abs(results_dataframe['beta'] / results_dataframe['standard_error'])
                     > self.t_statistic_threshold)
-        self.results = results_dataframe[t_statistic_mask]
+
+        sufficient_sample_size_mask = results_dataframe.sample_size != 0
+        selection = np.logical_and(t_statistic_mask, sufficient_sample_size_mask)
+        self.results = results_dataframe[selection]
 
     def write_debug(self):
         for cohort in self.cohort_list:
             file_path = os.path.join(
-                self.out, "failed", cohort.study_name, "a_singular_{}.txt")
+                self.out, "failed_", cohort.study_name, "_a_singular_{}.txt")
             for variant_name, a_singular_matrix in cohort.a_singular.items():
                 np.savetxt(
                     file_path.format(variant_name),

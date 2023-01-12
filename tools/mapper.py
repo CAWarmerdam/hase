@@ -23,6 +23,7 @@ def main(argv=None):
 	parser.add_argument("-g",required=True, type=str, help="path/paths to genotype data folder")
 	parser.add_argument('-study_name',type=str,required=True, default=None, help=' Study names')
 	parser.add_argument("-o", "--out", type=str,required=True, help="path to save result folder")
+	parser.add_argument('-ref_path', type=str, default=None, help='Reference path')
 	parser.add_argument('-ref_name', type=str, default='1000Gp1v3_ref', help='Reference panel name')
 	parser.add_argument('-mismatch_table',action='store_true',default=False, help='Save table with mismatch IDs')
 	parser.add_argument('-flipped_table',action='store_true',default=False, help='Save table with mismatch IDs')
@@ -74,55 +75,60 @@ def main(argv=None):
 
 		a = probes.select('probes', start = p_start_i, stop = p_stop_i)
 
-		if p==0:
-			print a.head()
-			if issubclass(type(a.iloc[0]['allele1']), np.str):
-				hashing=True
-			if "CHR" in a.columns and 'bp' in a.columns:
-				ID2CHR=True
-				merge=merge_on['CHR']
-				print ('Merge on CHR/bp')
-			else:
-				if ':' in a.ID.iloc[0] and ':' in a.ID.iloc[1]:
-					CHR=[]
-					bp=[]
-					for i in a.ID:
-						s=i.split(":")
-						CHR.append(s[0])
-						bp.append(s[1])
-					CHR=np.array(CHR,dtype=np.int8)
-					bp=np.array(bp)
-					if np.max(CHR)<23 and np.min(CHR)>0:
-						a['CHR']=CHR
-						a['bp']=bp
-						a.CHR = a.CHR.astype(np.int64)
-						a.bp = a.bp.astype(np.int64)
-						ID2CHR=True
-						IDconv=True
-						merge=merge_on['CHR']
-						print ('Merge on CHR/bp from ID')
-						print a.head()
-					else:
-						print 'No CHR and bp info...'
-						merge=merge_on['ID']
-						print ('Merge on ID')
-				else:
-					print 'No CHR and bp info...'
-					merge=merge_on['ID']
-					print ('Merge on ID')
+		# if p==0:
+		# 	print a.head()
+		# 	if issubclass(type(a.iloc[0]['allele1']), np.str):
+		# 		hashing=True
+		# 	if "CHR" in a.columns and 'bp' in a.columns:
+		# 		ID2CHR=True
+		# 		merge=merge_on['CHR']
+		# 		print ('Merge on CHR/bp')
+		# 	else:
+		# 		if ':' in a.ID.iloc[0] and ':' in a.ID.iloc[1]:
+		# 			CHR=[]
+		# 			bp=[]
+		# 			for i in a.ID:
+		# 				s=i.split(":")
+		# 				CHR.append(s[0])
+		# 				bp.append(s[1])
+		# 			CHR=np.array(CHR,dtype=np.int8)
+		# 			bp=np.array(bp)
+		# 			if np.max(CHR)<23 and np.min(CHR)>0:
+		# 				a['CHR']=CHR
+		# 				a['bp']=bp
+		# 				a.CHR = a.CHR.astype(np.int64)
+		# 				a.bp = a.bp.astype(np.int64)
+		# 				ID2CHR=True
+		# 				IDconv=True
+		# 				merge=merge_on['CHR']
+		# 				print ('Merge on CHR/bp from ID')
+		# 				print a.head()
+		# 			else:
+		# 				print 'No CHR and bp info...'
+		# 				merge=merge_on['ID']
+		# 				print ('Merge on ID')
+		# 		else:
+		# 			print 'No CHR and bp info...'
+		# 			merge=merge_on['ID']
+		# 			print ('Merge on ID')
+		#
+		# elif IDconv:
+		# 	def f(x):
+		# 		s=x.ID.split(':')
+		# 		return s[0],s[1]
+		# 	CHR_bp=a.apply(f, axis=1 )
+		# 	a['CHR'],a['bp']=zip(*CHR_bp)
+		# 	a.CHR=a.CHR.astype(np.int64)
+		# 	a.bp= a.bp.astype(np.int64)
+		# 	print a.head()
+		merge = {
+				'straight': ["CHR", 'bp', 'allele1', 'allele2'],
+				'reverse': ["CHR", 'bp', 'allele2', 'allele1']
+				}
 
-		elif IDconv:
-			def f(x):
-				s=x.ID.split(':')
-				return s[0],s[1]
-			CHR_bp=a.apply(f, axis=1 )
-			a['CHR'],a['bp']=zip(*CHR_bp)
-			a.CHR=a.CHR.astype(np.int64)
-			a.bp= a.bp.astype(np.int64)
-			print a.head()
 		a['counter_prob']=np.arange(p_start_i,p_stop_i,dtype='int32')
 
-		reference=Reference(args.ref_name)
+		reference=Reference(args.ref_name, args.ref_path)
 		reference.chunk=args.ref_chunk
 		reference.load()
 		counter_ref=0
@@ -156,7 +162,14 @@ def main(argv=None):
 					print 'time {}'.format(t.secs)
 
 			match_df = pd.merge(b,a, left_on=merge['straight'], right_on=merge['straight'])
-			flip_df=pd.merge(b[~b.counter_ref.isin(match_df.counter_ref)],a, left_on=merge['reverse'], right_on=merge['straight'])
+			match_df = match_df[~(match_df.ID_x != match_df.ID_y)]
+			flip_df = pd.merge(
+				b[~b.counter_ref.isin(match_df.counter_ref)], a,
+				left_on=merge['reverse'], right_on=merge['straight'])
+			flip_df = flip_df[~(flip_df.ID_x != flip_df.ID_y)]
+
+			# Remove all flips that
+			#flip_df = flip_df[~flip_df.counter_prob.isin(np.append(match_df.counter_prob, match_index))]
 
 			if len(match_df):
 				match_key=np.append(match_key,match_df.counter_ref)
@@ -173,6 +186,8 @@ def main(argv=None):
 				else:
 					del_counter_ref[r]=np.append(del_counter_ref[r], flip_key)
 			gc.collect()
+
+
 
 	index=np.ones(ID.shape[0],dtype='int')*-1
 	flip=np.ones(probes_n_rows,dtype='int')

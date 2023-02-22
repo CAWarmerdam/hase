@@ -98,6 +98,7 @@ class ClassicMetaAnalyser:
             self.save_results_per_cohort(
                 variant_names, phenotype_names,
                 chunk=chunk, node=node)
+            self.results_index += 1
             if self._debug:
                 self.write_debug()
 
@@ -188,6 +189,9 @@ class ClassicMetaAnalyser:
         meta_analysed_standard_error = np.sqrt(1 / one_divided_by_variance_total)
 
         # We need to quantify heterogeneity. We do this by calculating I2 values.
+        # The first step is calculating a Q-value:
+        # The weighted sum of squared differences between individual study
+        # effects and the pooled effects across studies.
         effect_size_deviations_from_mean = np.power(
             effect_sizes - meta_analysed_effect_sizes, 2)
 
@@ -197,11 +201,10 @@ class ClassicMetaAnalyser:
             axis=0)
 
         # Expected effect size deviations from the mean
-        expected_effect_size_deviations = len(self.cohort_list) - 1
+        expected_effect_size_deviations = (np.sum(~np.isnan(effect_size_deviations_from_mean), axis=0) - 1)
         with np.errstate(divide='ignore'):
             i_squared = (
-                ((effect_size_deviations
-                  - expected_effect_size_deviations)
+                ((effect_size_deviations - expected_effect_size_deviations)
                  / effect_size_deviations
                  ) * 100)
 
@@ -272,7 +275,6 @@ class ClassicMetaAnalyser:
             pq.write_table(pa.Table.from_pandas(
                 results, pyarrow_schema), output_path)
 
-        self.results_index += 1
         self.results = None
 
     def save_results_per_cohort(
@@ -287,9 +289,38 @@ class ClassicMetaAnalyser:
         # 0th dimension represents the studies / cohorts, the
         # 1st dimension represents the variants, and the
         # 2nd dimension represents the phenotypes.
+
         effects_to_report = np.dot(
             variant_selection[:, None],
             phenotype_selection[None, :])
+
+        per_cohort_threshold = 1 * 10 ** 9
+        if len(self.pheno_full_log) == 0:
+            print("No phenotypes provided for per cohort results. "
+                  + "Trying to write per cohort results for all phenotypes.")
+            phenotype_selection = np.array([True] * len(phenotype_names))
+
+            effects_to_report = np.dot(
+                variant_selection[:, None],
+                phenotype_selection[None, :])
+
+            if np.sum(effects_to_report) > per_cohort_threshold:
+                Warning("Refusing to write over {} effects for each cohort.".format(per_cohort_threshold))
+                return
+
+        elif len(self.variants_full_log) == 0:
+            variant_selection = np.array([True] * len(variant_names))
+
+            effects_to_report = np.dot(
+                variant_selection[:, None],
+                phenotype_selection[None, :])
+
+            if np.sum(effects_to_report) > per_cohort_threshold:
+                Warning("Refusing to write over {} effects for each cohort.".format(per_cohort_threshold))
+                return
+
+        print("Per cohort effects to report")
+        print(effects_to_report)
 
         if not np.any(effects_to_report):
             return

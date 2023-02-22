@@ -361,6 +361,7 @@ class Mapper(object):
 
     def __init__(self):
 
+        self.reference_path = None
         self.is_filtered = False
         self.name = None
         self.genotype_names = []
@@ -426,7 +427,7 @@ class Mapper(object):
             return None
 
     # @timing
-    def fill(self, keys, name, repeats=False, reference=None):  # TODO (middle) remove
+    def fill(self, keys, name, path=None, repeats=False, reference=None):  # TODO (middle) remove
         """
 		Fill the mapper
 		:param keys: The labels for phenotypes/covariates.single that are passed
@@ -438,6 +439,7 @@ class Mapper(object):
         # Assign the given reference to the field, this appears to be False most of the time
         self.reference = reference
         self.reference_name = name
+        self.reference_path = path
         # Add the name of the column
         self.column_names.append(name)
 
@@ -587,7 +589,7 @@ class Mapper(object):
         print ('You loaded values for {} studies and {} test values'.format(self.n_study, self.n_keys))
 
         if self.include is not None or self.exclude is not None or True:
-            self.reference = Reference(self.reference_name)
+            self.reference = Reference(self.reference_name, self.reference_path)
             self.reference.load_index()
 
     # @timing

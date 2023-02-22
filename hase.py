@@ -92,6 +92,7 @@ def main(argv=None):
     parser.add_argument('-mapper', type=str, help='Mapper data folder')
 
     parser.add_argument('-ref_name', type=str, default='1000Gp1v3_ref', help='Reference panel name')
+    parser.add_argument('-ref_path', type=str, default=None, help='Reference panel path')
 
     # ADDITIONAL SETTINGS
     parser.add_argument(
@@ -229,6 +230,8 @@ def main(argv=None):
         mapper.genotype_names = args.study_name
         mapper.chunk_size = MAPPER_CHUNK_SIZE
         mapper.reference_name = args.ref_name
+        mapper.reference_path = args.ref_path
+        print(mapper.reference_path)
         mapper.load_flip(args.mapper)
         mapper.load(args.mapper)
 
@@ -339,6 +342,7 @@ def main(argv=None):
         mapper.genotype_names = args.study_name
         mapper.chunk_size = MAPPER_CHUNK_SIZE
         mapper.reference_name = args.ref_name
+        mapper.reference_path = args.ref_path
         mapper.load_flip(args.mapper)
         mapper.load(args.mapper)
         mapper.cluster = args.cluster
@@ -381,8 +385,10 @@ def main(argv=None):
         if args.derivatives is None:
             raise ValueError('For meta-stage analysis partial derivatives data are required!')
         mapper = load_mapper(
-            mapper_chunk_size=MAPPER_CHUNK_SIZE, study_name=args.study_name, ref_name=args.ref_name,
-            mapper_folder=args.mapper, encoded=args.encoded, cluster=args.cluster, node=args.node,
+            mapper_chunk_size=MAPPER_CHUNK_SIZE, study_name=args.study_name,
+            ref_name=args.ref_name,
+            mapper_folder=args.mapper, encoded=args.encoded, cluster=args.cluster,
+            node=args.node, ref_path=args.ref_path,
             snp_id_inc=args.snp_id_inc, snp_id_exc=args.snp_id_exc)
 
         Analyser = HaseAnalyser()
@@ -662,7 +668,7 @@ def main(argv=None):
         mapper = load_mapper(
             mapper_chunk_size=MAPPER_CHUNK_SIZE, study_name=args.study_name, ref_name=args.ref_name,
             mapper_folder=args.mapper, encoded=args.encoded, cluster=args.cluster, node=args.node,
-            snp_id_inc=args.snp_id_inc, snp_id_exc=args.snp_id_exc)
+            ref_path=args.ref_path, snp_id_inc=args.snp_id_inc, snp_id_exc=args.snp_id_exc)
 
         # It appears to me that the pard list contains
         # partial derivatives matrices for every study
@@ -897,6 +903,7 @@ def main(argv=None):
 
 def load_mapper(mapper_chunk_size, study_name, ref_name,
                 mapper_folder, encoded, cluster, node,
+                ref_path=None,
                 snp_id_inc=None, snp_id_exc=None):
     # Create Mapper object. This mapper object makes us able to synchronise across al variants
     # in each of the separate datasets
@@ -906,6 +913,7 @@ def load_mapper(mapper_chunk_size, study_name, ref_name,
     # Assign study and reference names
     mapper.genotype_names = study_name
     mapper.reference_name = ref_name  # Reference dataset
+    mapper.reference_path = ref_path
     # Check if we are to exlude, or explicitly include some set of variants
     if snp_id_inc is not None:  # If this is not none the argument contains table(s) of snps to include
         mapper.load_filter_include(snp_id_inc)

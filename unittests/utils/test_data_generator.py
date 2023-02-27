@@ -22,12 +22,26 @@ DEFAULT_NUMBER_OF_PHENOTYPES = 48
 DEFAULT_NUMBER_OF_COVARIATES = 3
 
 
-def sample_variants_from_ref(number_of_variants):
+def sample_variants_from_ref(
+        number_of_variants,
+        ids=None,
+        reference_path="~/Documents/hdaa/hase_repository/data/1000Gp1v3.ref.gz"):
+
+    # Load ref dataset
     ref_data_set = pd.read_csv(
-        "~/Documents/hdaa/hase_repository/data/1000Gp1v3.ref.gz", sep=" ",
+        reference_path, sep=" ",
         compression="gzip")
-    variants_data_frame = ref_data_set.sample(n=number_of_variants)
-    return variants_data_frame
+
+    print(ref_data_set.head())
+
+    if ids is not None:
+        selected_ref = ref_data_set.loc[ref_data_set.ID.isin(ids), :]
+        sampled_ref = ref_data_set.sample(n=number_of_variants - len(selected_ref))
+
+        return (pd.concat([selected_ref, sampled_ref])
+                        .drop_duplicates().reset_index(drop=True))
+    else:
+        return ref_data_set.sample(n=number_of_variants)
 
 
 def fit_model(X2, y):
@@ -611,14 +625,28 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
+    # generate_dataset_with_missingness(
+    #     variants_data_frame=sample_variants_from_ref(10000),
+    #     number_of_phenotypes=1000,
+    #     number_of_covariates=100,
+    #     base_output_path="../resources/largedataset/",
+    #     fit_models=False
+    #     )
+
+    ref = sample_variants_from_ref(
+        100, ids=["rs10689341", "rs1227495434"],
+        reference_path="../resources/alleleflips/hase_reference/1000G-30x.ref.gz")
     generate_dataset_with_missingness(
-        variants_data_frame=sample_variants_from_ref(10000),
-        number_of_phenotypes=1000,
-        number_of_covariates=100,
-        base_output_path="../resources/largedataset/",
+        variants_data_frame=ref,
+        number_of_phenotypes=20,
+        number_of_covariates=10,
+        base_output_path="../resources/complexindels/",
         fit_models=False
         )
+
     #
+    #0.0152091253548861
+    #0.169201523065567
     # generate_covariate_subsetting_dataset(
     #     variants_data_frame=sample_variants_from_ref(DEFAULT_NUMBER_OF_VARIANTS),
     #     number_of_phenotypes=DEFAULT_NUMBER_OF_PHENOTYPES,

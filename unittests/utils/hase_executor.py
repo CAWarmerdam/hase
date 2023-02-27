@@ -14,15 +14,18 @@ from tools import mapper
 
 
 class HaseExecutor:
-    def __init__(self, working_dir, project_root, study_names):
+    def __init__(self, working_dir, project_root, study_names,
+                 ref_name="1000Gp1v3_ref", ref_path=None, new_mapper_options=True):
 
+        self.new_mapper_options = new_mapper_options
         self.nodes_n = None
         self.node_i = None
         self._covariate_indices_path = None
         self.study_names = study_names
         self.project_root = project_root
         self.test_dir = working_dir
-        self.ref_name = "1000Gp1v3_ref"
+        self.ref_name = ref_name
+        self.ref_path = ref_path if ref_path is not None else os.path.join(self.project_root, "data")
         self.results_directory = os.path.join(self.test_dir, "results")
         self.phenotype_ids_logging_path = None
         self.variant_ids_logging_path = None
@@ -77,10 +80,17 @@ class HaseExecutor:
 
     def per_cohort_mapper_step(self, hdf5_genotype_directory, study_name):
         if not os.path.exists(self.get_mapper_folder(study_name)):
-            mapper.main(["-g", hdf5_genotype_directory,
-                         "-study_name", study_name,
-                         "-ref_name", self.ref_name,
-                         "-o", self.get_mapper_folder(study_name)])
+            new_flip_options = ["-force_no_flips", "-force_consistent_ids"]
+
+            mapper_options = ["-g", hdf5_genotype_directory,
+                              "-study_name", study_name,
+                              "-ref_name", self.ref_name,
+                              "-ref_path", self.ref_path,
+                              "-o", self.get_mapper_folder(study_name)]
+
+            if self.new_mapper_options:
+                mapper_options.extend(new_flip_options)
+            mapper.main(mapper_options)
 
     def per_cohort_partial_derivatives(self, cov_interaction_matrix, hdf5_genotype_directory, partial_derivatives,
                                        phenotype_matrix, study_name):
@@ -91,6 +101,7 @@ class HaseExecutor:
                    "-ph", phenotype_matrix,
                    "-cov", cov_interaction_matrix,
                    "-ref_name", self.ref_name,
+                   "-ref_path", self.ref_path,
                    "-mode", "single-meta"])
 
     def finalize_per_cohort(self, encoding_output, hdf5_genotype_directory, partial_derivatives, study_name):
@@ -127,6 +138,7 @@ class HaseExecutor:
                    "-mapper", self.get_mapper_folder(study_name),
                    "-ph", phenotype_matrix,
                    "-ref_name", self.ref_name,
+                   "-ref_path", self.ref_path,
                    "-mode", "encoding"])
 
     def prepare_mapper_meta_folder(self):
@@ -162,12 +174,13 @@ class HaseExecutor:
                             ["-o", self.results_directory],
                             ["-encoded"], ["1"] * len(self.study_names),
                             ["-ref_name", self.ref_name],
-                            ["-mapper_chunk", "500"],
+                            ["-ref_path", self.ref_path],
+                            ["-mapper_chunk", "100"],
                             ["-mode", mode],
                             ["-allow_missingness"],
-                            ["-snp_id_log", self.variant_ids_logging_path],
+                            # ["-snp_id_log", self.variant_ids_logging_path],
                             ["-ph_id_log", self.phenotype_ids_logging_path],
-                            ["-th", "0"],
+                            # ["--covariate-indices", "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/resources/freqdataset/covariate_indices_test.txt"],
                             ["-maf", "0.05"]]
         covariate_indices_path = self.get_covariate_indices_path()
         if covariate_indices_path:
@@ -238,7 +251,7 @@ def main(argv=None):
 
     resources_dir = os.path.join("..", "resources")
     project_root = os.path.join("..", "..")
-    dataset = "largedataset"
+    dataset = "freqdataset"
     data_dir = os.path.join(resources_dir, "%s" % dataset)
 
     test_dir = os.path.join(project_root, "unittests", dataset, "out")
@@ -261,7 +274,6 @@ def main(argv=None):
     # # mem_usage_df[1] = timestamps_as_datetime
     # print(mem_usage_df)
     # print('Memory usage (in chunks of .1 seconds): %s' % mem_usage)
-
 
     return 0
 

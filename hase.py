@@ -264,6 +264,7 @@ def main(argv=None):
             N_snps_read = 0
             while True:
                 with Timer() as t_gen:
+                    # Loop through genotype data.
                     genotype = gen.get_next()
                     if isinstance(genotype, type(None)):
                         break

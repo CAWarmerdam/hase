@@ -30,6 +30,10 @@ def main(argv=None):
 	parser.add_argument('-probe_chunk',type=int,default=10000, help='Probes chunk')
 	parser.add_argument('-ref_chunk',type=int,default=10000, help='Reference chunk')
 	parser.add_argument('-chunk',type=int,default=2000000, help='Chunk size')
+	parser.add_argument('-force_no_flips',action='store_true',default=False,
+						help='Raise exception when a flip has been encountered')
+	parser.add_argument('-force_consistent_ids',action='store_true',default=False,
+						help='Prevent flips with inconsistent ids')
 	args = parser.parse_args(argv)
 	print args
 
@@ -166,10 +170,8 @@ def main(argv=None):
 			flip_df = pd.merge(
 				b[~b.counter_ref.isin(match_df.counter_ref)], a,
 				left_on=merge['reverse'], right_on=merge['straight'])
-			flip_df = flip_df[~(flip_df.ID_x != flip_df.ID_y)]
-
-			# Remove all flips that
-			#flip_df = flip_df[~flip_df.counter_prob.isin(np.append(match_df.counter_prob, match_index))]
+			if args.force_consistent_ids:
+				flip_df = flip_df[~(flip_df.ID_x != flip_df.ID_y)]
 
 			if len(match_df):
 				match_key=np.append(match_key,match_df.counter_ref)
@@ -179,6 +181,9 @@ def main(argv=None):
 				else:
 					del_counter_ref[r]=np.append(del_counter_ref[r], match_key)
 			if len(flip_df):
+				if args.force_no_flips:
+					raise ValueError('Encountered at least {} flips while zero flips are expected. '
+									 'Something went wrong...'.format(len(flip_df)))
 				flip_key=np.append(flip_key,flip_df.counter_ref)
 				flip_index=np.append(flip_index,flip_df.counter_prob)
 				if del_counter_ref.get(r) is None:

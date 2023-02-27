@@ -45,7 +45,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         # self.test_dir = tempfile.mkdtemp()
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
-        self.dataset = "freqdataset"
+        self.dataset = "largedataset"
         self.data_dir = os.path.join(self.resources_dir, "%s" % self.dataset)
 
         self.test_dir = os.path.join(self.project_root, "unittests", self.dataset, "out")
@@ -54,8 +54,15 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         self.study_names = ["test_0", "test_1", "test_2"]
 
-        self.hase_executor = HaseExecutor(self.test_dir, self.project_root,
-                                          self.study_names)
+        self.hase_executor = HaseExecutor(
+            self.test_dir, self.project_root,
+            self.study_names, new_mapper_options=False)
+        #
+        # self.hase_executor = HaseExecutor(
+        #     self.test_dir, self.project_root,
+        #     self.study_names, "1000G-30x_ref",
+        #     "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/resources/alleleflips/hase_reference",
+        #     False)
 
         self.hase_executor.meta_analyse(self.data_dir)
 

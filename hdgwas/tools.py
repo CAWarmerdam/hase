@@ -133,7 +133,7 @@ class HaseAnalyser(Analyser):
             raise ValueError('Please set result pathway to Analyser!')
 
         if isinstance(self.DF, type(None)):
-            print ('DF is not defined. Forced to use z_score statistics!')
+            print('DF is not defined. Forced to use z_score statistics!')
 
         if self.result_folder is None:
             self.result_folder = [i for i in glob.glob(os.path.join(self.result_path, '*.npy')) if 'RSID' not in i]
@@ -208,7 +208,7 @@ class HaseAnalyser(Analyser):
             mask = np.where(np.abs(self.t_stat) > 0)
 
         if (len(mask[0]) != 0):
-            print ('Saving results to {}'.format(save_path))
+            print('Saving results to {}'.format(save_path))
             t_save = self.t_stat[mask[0], mask[1], mask[2]]
             se = self.standard_error[mask[0], mask[1], mask[2]]
             result = {'phenotype': phen_names[mask[2]], 't-stat': t_save, 'index': self.rsid[mask[0]], 'SE': se,
@@ -500,7 +500,7 @@ class Mapper(object):
                     self.dic[j] = self.dic[j] + [i]
                 else:
                     if new_id:
-                        print ('WARNING! You are pushing ID {} which is not present in reference panel!'.format(j))
+                        print('WARNING! You are pushing ID {} which is not present in reference panel!'.format(j))
                         self.dic[j] = [-1] * (self.n_study + 1)
                         self.dic[j][self.n_study] = i
                     else:
@@ -584,9 +584,9 @@ class Mapper(object):
 
         self.n_study = self.values.shape[1]
         if self.n_keys < self.n_study:
-            print ('WARNING!!! Normally should be more test values that studies! Check your saved data for Mapper')
+            print('WARNING!!! Normally should be more test values that studies! Check your saved data for Mapper')
 
-        print ('You loaded values for {} studies and {} test values'.format(self.n_study, self.n_keys))
+        print('You loaded values for {} studies and {} test values'.format(self.n_study, self.n_keys))
 
         if self.include is not None or self.exclude is not None or True:
             self.reference = Reference(self.reference_name, self.reference_path)
@@ -679,7 +679,7 @@ class Mapper(object):
                     self.processed = self.processed - len(np.arange(start, finish))
                     break
                 else:
-                    print ('Added back chunk {}'.format(ch))
+                    print('Added back chunk {}'.format(ch))
                     self.chunk_pool.append(ch)
                     break
             else:
@@ -737,7 +737,8 @@ class Mapper(object):
                         self.include['indices'] = self.include.ID.apply(lambda x: key_index_dictionary.get(x, (-1)))
                         print("Retrieved all indices of variants that should be included!")
                         self.include = self.include[self.include['indices'] != -1]
-                        print("Number of variants that remain after excluding variants not in mapper: {}".format(self.include.shape[0]))
+                        print("Number of variants that remain after excluding variants not in mapper: {}".format(
+                            self.include.shape[0]))
                     elif 'CHR' in self.include.columns and 'bp' in self.include.columns:
                         raise NotImplementedError()
                         # TODO: check first if this works as expected
@@ -747,7 +748,7 @@ class Mapper(object):
                         # self.include['indices'] = self.query_include.index
                     if "cohort" not in self.include.index.names:
                         self.include = pd.concat(
-                            [self.include]*self.values.shape[1],
+                            [self.include] * self.values.shape[1],
                             keys=np.arange(self.values.shape[1]),
                             names=["cohort", "row"])
 
@@ -760,7 +761,6 @@ class Mapper(object):
                             self.include.index.get_level_values("cohort").values])
 
                     self.values = new_values
-
 
                 if self.exclude is not None:
                     if 'ID' in self.exclude.columns:
@@ -776,7 +776,7 @@ class Mapper(object):
                         # self.exclude['indices'] = self.query_exclude.index
                     if "cohort" not in self.exclude.index.names:
                         self.exclude = pd.concat(
-                            [self.exclude]*self.values.shape[1],
+                            [self.exclude] * self.values.shape[1],
                             keys=np.arange(self.values.shape[1]),
                             names=["cohort", "row"])
 
@@ -826,7 +826,7 @@ class Mapper(object):
                 self.processed = self.processed = start
                 finish = start
             else:
-                print ('Added back chunk {}'.format(ch))
+                print('Added back chunk {}'.format(ch))
                 self.chunk_pool.append(ch)
                 finish = ch[0]
 
@@ -870,12 +870,12 @@ class Mapper(object):
                     raise ValueError('{} table should have one of the following column combinations:{}{}'.format(
                         variant_filter_file, os.linesep, (
                             " OR:{}".format(os.linesep)
-                                .join(["'{}'".format("', '".join(column_set)) for column_set in column_sets]))))
+                            .join(["'{}'".format("', '".join(column_set)) for column_set in column_sets]))))
                 if matching_column_sets > 1:
                     raise ValueError('{} table columns matches more than one possible column combination:{}{}'.format(
                         variant_filter_file, os.linesep, (
                             " OR:{}".format(os.linesep)
-                                .join(["'{}'".format("', '".join(column_set)) for column_set in column_sets]))))
+                            .join(["'{}'".format("', '".join(column_set)) for column_set in column_sets]))))
             filter_dataframes.append(filter_dataframe)
         if len(filter_dataframes) == 1:
             mapper_exclude = filter_dataframes[0]
@@ -883,8 +883,6 @@ class Mapper(object):
             mapper_exclude = pd.concat(
                 filter_dataframes, keys=np.arange(len(paths)), names=["cohort", "row"])
         return mapper_exclude
-
-
 
 
 ########################################################################
@@ -898,7 +896,7 @@ class Reference(object):
         if path is None:
             self.path_default = os.path.join(os.environ['HASEDIR'], 'data')
         else:
-            self.path_default=path
+            self.path_default = path
         self.path = {
             self.name: {
                 'table': os.path.join(self.path_default, '{}.ref.gz'.format(self.name.rstrip("_ref"))),
@@ -986,7 +984,7 @@ def get_identifier_array(object):
     else:
         # If collect the ids from the given object
         if isinstance(object, tuple):
-            id_p = np.empty((0,2), dtype=np.str)
+            id_p = np.empty((0, 2), dtype=np.str)
             # For each study / cohort, the ids are appended.
             # AFAIK, no care is given to possible duplicates.
             # Here, we take care of possible duplicates by prepending
@@ -1034,7 +1032,7 @@ def get_intersecting_individual_indices(datasets):
         intersection_indices = (identifier == intersection).all(-1)
         indices[key] = intersection_indices.argmax(axis=0)
 
-    print ('There are {} common ids'.format(len(intersection)))
+    print('There are {} common ids'.format(len(intersection)))
     # Could possibly save the results...
     return indices, intersection
 
@@ -1047,7 +1045,7 @@ def select_identifiers(study_index, row_index, intersection):
     # Get the identifiers from the datasets
     for key, indices in row_index.items():
         indices_of_selected_samples[key] = indices[np.where(
-            intersection[:,1] == str(study_index)
+            intersection[:, 1] == str(study_index)
         )]
 
     return indices_of_selected_samples
@@ -1119,7 +1117,7 @@ def study_indexes(args=None,
         index_g = np.array([np.where(id_g == i)[0][0] for i in common_id])
         index_c = np.array([np.where(id_c == i)[0][0] for i in common_id])
 
-    print ('There are {} common ids'.format(len(common_id)))
+    print('There are {} common ids'.format(len(common_id)))
     np.savetxt(os.path.join(os.environ['HASEOUT'], 'study_common_id.txt'), common_id, fmt='%s')
     np.savetxt(os.path.join(os.environ['HASEOUT'], 'gen_id.txt'), index_g, fmt='%s')
     np.savetxt(os.path.join(os.environ['HASEOUT'], 'phen_id.txt'), index_p, fmt='%s')
@@ -1197,7 +1195,7 @@ def check_converter(converted_folder, study_name):
     if os.path.isdir(os.path.join(converted_folder, 'tmp_files')):
         l_tmp = os.listdir(os.path.join(converted_folder, 'tmp_files'))
         if len(l_tmp) == 0:
-            print ('There is no tmp files!')
+            print('There is no tmp files!')
         else:
             try:
                 df_tmp = pd.read_csv(os.path.join(converted_folder, 'tmp_files', 'info.txt'), header=None)
@@ -1208,18 +1206,18 @@ def check_converter(converted_folder, study_name):
         df_tmp = None
 
     if len(l_ind) != 1 or '.h5' not in l_ind[0]:
-        print ('There should be 1 hdf5 file in individuals folder!')
+        print('There should be 1 hdf5 file in individuals folder!')
 
     else:
         df_ind = pd.read_hdf(os.path.join(converted_folder, 'individuals', study_name + '.h5'), 'individuals')
         if df_tmp is not None and int(df_tmp[0][0]) != df_ind.shape[0]:
-            print ('Converted number of IDs {} != {} original number'.format(df_ind.shape[0], df_tmp[0][0]))
+            print('Converted number of IDs {} != {} original number'.format(df_ind.shape[0], df_tmp[0][0]))
         else:
-            print ('Number of individuals {} '.format(df_ind.shape[0]))
-            print (df_ind.head())
+            print('Number of individuals {} '.format(df_ind.shape[0]))
+            print(df_ind.head())
 
     if len(l_probes) != 2:
-        print ('There should be 2 files in probes folder, you have {}!'.format(len(l_probes)))
+        print('There should be 2 files in probes folder, you have {}!'.format(len(l_probes)))
         probes = pd.HDFStore(os.path.join(converted_folder, 'probes', study_name + '.h5'), 'r')
         N_probs = probes.get_storer('probes').nrows
 
@@ -1228,12 +1226,12 @@ def check_converter(converted_folder, study_name):
         N_probs = probes.get_storer('probes').nrows
 
     if df_tmp is not None and int(df_tmp[0][1]) != N_probs:
-        print ("Converted number of variants {} diff from  original number {}".format(N_probs, df_tmp[0][1]))
+        print("Converted number of variants {} diff from  original number {}".format(N_probs, df_tmp[0][1]))
 
     else:
-        print ('Converted number of variants {}'.format(N_probs))
+        print('Converted number of variants {}'.format(N_probs))
 
-        print (probes.select('probes', start=0, stop=10))
+        print(probes.select('probes', start=0, stop=10))
         probes.close()
 
     if len(l_genotype) == 0:
@@ -1248,10 +1246,10 @@ def check_converter(converted_folder, study_name):
             print('Number of variants in genotype folder {} != {} number in probes file'.format(index, N_probs))
 
         else:
-            print ('Number of variants in genotype folder {}'.format(index))
+            print('Number of variants in genotype folder {}'.format(index))
 
-        print (h5py.File(os.path.join(converted_folder, 'genotype', l_genotype[0]), 'r')['genotype'][...])
+        print(h5py.File(os.path.join(converted_folder, 'genotype', l_genotype[0]), 'r')['genotype'][...])
 
 
 if __name__ == '__main__':
-    print ('tools')
+    print('tools')

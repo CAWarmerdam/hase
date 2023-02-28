@@ -104,10 +104,11 @@ def calculate_variant_dependent_a(genotype, factor_matrix,
     variable_term_index = 0
     # Have to add extra columns to the covariates.single
 
-    covariates = np.tile(covariates, (genotype.shape[0],1,1))
+    #covariates = np.tile(covariates, (1, 1, 1))
 
     # Loop through the columns of the factor matrix
     for factor_column in factor_matrix.T:
+        raise NotImplementedError("Interactions not yet implemented")
         # Multiply the genotypes with the factor column
         interaction_values = genotype * factor_column
         # This creates a 2d array with columns representing the
@@ -147,10 +148,10 @@ def calculate_variant_dependent_a(genotype, factor_matrix,
 
 def calculate_dot_product_for_variants(covariates, other_independent_determinant):
     # In the dot einsum notation, labels represent the following:
-    # i: variants
-    # j: individuals (dot product of genotypes, covariates.single)
+    # v: variants
+    # i: individuals (dot product of genotypes, covariates.single)
     # k: different covariates.single
-    sec = np.einsum('ij,ijk->ik', other_independent_determinant, covariates)
+    sec = np.einsum('vi,ik->vk', other_independent_determinant, covariates)
     # (Values get summed along individuals)
     return sec
 

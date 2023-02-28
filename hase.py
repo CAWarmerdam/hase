@@ -5,6 +5,7 @@ import os
 import numpy as np
 
 from config import MAPPER_CHUNK_SIZE, basedir, CONVERTER_SPLIT_SIZE, PYTHON_PATH
+from hdgwas.matrix_decomposition import MatrixDecomposer
 from hdgwas.meta_classic import CohortAnalyser
 from hdgwas.meta_classic import ClassicMetaAnalyser
 
@@ -333,6 +334,34 @@ def main(argv=None):
             print ('Time to create fake phenotype is {}sec'.format(t_phen.secs))
 
         print ('Time to encode all data: {} sec'.format(t.secs))
+
+    ################################### DECOMPOSE_B4_MATRIX ############################
+
+    elif args.mode == 'decompose':
+
+        # ARG_CHECKER.check(args,mode='single-meta')
+        mapper = Mapper()
+        mapper.genotype_names = args.study_name
+        mapper.chunk_size = MAPPER_CHUNK_SIZE
+        mapper.reference_name = args.ref_name
+        mapper.reference_path = args.ref_path
+        mapper.load_flip(args.mapper)
+        mapper.load(args.mapper)
+        mapper.cluster = args.cluster
+        mapper.node = args.node
+
+        phen = Reader('phenotype')
+        phen.start(args.phenotype[0])
+
+        gen = Reader('genotype')
+        gen.start(args.genotype[0], hdf5=args.hdf5, study_name=args.study_name[0], ID=False)
+
+        MatrixDecomposer(args.out)
+
+        with Timer() as t:
+            MatrixDecomposer.decompose_matrix(
+                phen=phen, gen=gen, mapper=mapper)
+        print ('Time to compute b4 decomposition : {} sec'.format(t.secs))
 
     ################################### SINGLE META STAGE ##############################
 

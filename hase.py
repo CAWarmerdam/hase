@@ -57,7 +57,7 @@ def main(argv=None):
     parser.add_argument("-o", "--out", type=str, required=True, help="path to save result folder")
 
     parser.add_argument("-mode", required=True, type=str,
-                        choices=['regression', 'converting', 'single-meta', 'meta-stage', 'meta-classic', 'encoding'],
+                        choices=['regression', 'converting', 'single-meta', 'meta-stage', 'meta-classic', 'encoding', 'decompose'],
                         help='Main argument, specify type of analysis'
                              '*****************'
                              'converting - before start to use any kind of analysis you need to convert data, it could take some time, '

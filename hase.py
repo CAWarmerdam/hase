@@ -356,10 +356,10 @@ def main(argv=None):
         gen = Reader('genotype')
         gen.start(args.genotype[0], hdf5=args.hdf5, study_name=args.study_name[0], ID=False)
 
-        MatrixDecomposer(args.out)
+        decomposer = MatrixDecomposer(args.out)
 
         with Timer() as t:
-            MatrixDecomposer.decompose_matrix(
+            decomposer.decompose_matrix(
                 phen=phen, gen=gen, mapper=mapper)
         print ('Time to compute b4 decomposition : {} sec'.format(t.secs))
 

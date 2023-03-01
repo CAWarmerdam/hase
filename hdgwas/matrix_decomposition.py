@@ -76,7 +76,7 @@ class MatrixDecomposer(Encoder):
                 # Save data when no more genotype chunks are to be iterated over.
                 if isinstance(genotype, type(None)):
                     return
-                flip = mapper.flip[mapper.folder.name][N_snps_read:N_snps_read + genotype.shape[0]]
+                flip = mapper.flip[gen.folder.name][N_snps_read:N_snps_read + genotype.shape[0]]
                 N_snps_read += genotype.shape[0]
                 flip_index = (flip == -1)
                 genotype = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, genotype)
@@ -93,7 +93,7 @@ class MatrixDecomposer(Encoder):
                 # Save data when no more genotype chunks are to be iterated over.
                 if isinstance(genotype, type(None)):
                     return
-                flip = mapper.flip[mapper.folder.name][N_snps_read:N_snps_read + genotype.shape[0]]
+                flip = mapper.flip[gen.folder.name][N_snps_read:N_snps_read + genotype.shape[0]]
                 N_snps_read += genotype.shape[0]
                 flip_index = (flip == -1)
                 genotype = np.apply_along_axis(lambda x: flip * (x - 2 * flip_index), 0, genotype)

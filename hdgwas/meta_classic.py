@@ -201,12 +201,17 @@ class ClassicMetaAnalyser:
             axis=0)
 
         # Expected effect size deviations from the mean
-        expected_effect_size_deviations = (np.sum(~np.isnan(effect_size_deviations_from_mean), axis=0) - 1)
+        degrees_of_freedom = (np.sum(~np.isnan(effect_size_deviations_from_mean), axis=0) - 1)
         with np.errstate(divide='ignore'):
             i_squared = (
-                ((effect_size_deviations - expected_effect_size_deviations)
+                ((effect_size_deviations - degrees_of_freedom)
                  / effect_size_deviations
                  ) * 100)
+
+            # If the i_squared happens to be NaN, set it to a hundred.
+            # Lack of precision causing the effect_size_deviations to be slightly different from 0
+            # make the I_squared also one hundred.
+            i_squared[np.isnan(i_squared)] = 100
 
         meta_analysis_sample_sizes = np.nansum(
             self.get_sample_sizes(), axis=0)[not_all_nan]
@@ -294,7 +299,7 @@ class ClassicMetaAnalyser:
             variant_selection[:, None],
             phenotype_selection[None, :])
 
-        per_cohort_threshold = 1 * 10 ** 9
+        per_cohort_threshold = 1 * 10 ** 6
         if len(self.pheno_full_log) == 0:
             print("No phenotypes provided for per cohort results. "
                   + "Trying to write per cohort results for all phenotypes.")

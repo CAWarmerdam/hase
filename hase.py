@@ -772,7 +772,7 @@ def main(argv=None):
                 [i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders]):
             raise ValueError(
                 'Partial Derivatives covariates have different number of subjects {} than genotype and phenotype {}'.format(
-                    row_index["covariates"].shape[0],
+                    row_index["partial_derivatives"].shape[0],
                     np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders])))
 
         covariate_indices = None
@@ -819,14 +819,14 @@ def main(argv=None):
 
             # This determines how the current chunk should be obtained.
             if mapper.cluster == 'n':
-                variant_indices, keys = mapper.get(
-                    allow_missingness=args.allow_missingness)
+                variant_indices, keys, chromosomes = mapper.get(
+                    allow_missingness=args.allow_missingness, chromosomes=True)
             elif mapper.cluster == 'y':
                 ch = mapper.chunk_pop()
                 if ch is None:
                     break
-                variant_indices, keys = mapper.get(
-                    chunk_number=ch, allow_missingness=args.allow_missingness)
+                variant_indices, keys, chromosomes = mapper.get(
+                    chunk_number=ch, allow_missingness=args.allow_missingness, chromosomes=True)
 
             # Now we can check if we have looped through all genotype chunks...
             if isinstance(variant_indices, type(None)):
@@ -842,10 +842,10 @@ def main(argv=None):
             if mapper.cluster == 'y':
                 classic_meta_analyser.analyse_genotype_chunk(
                     genotype, keys, variant_indices,
-                    chunk=ch, node=mapper.node[1])
+                    chunk=ch, node=mapper.node[1], chromosomes=chromosomes)
             else:
                 classic_meta_analyser.analyse_genotype_chunk(
-                    genotype, keys, variant_indices)
+                    genotype, keys, variant_indices, chromosomes=chromosomes)
 
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################

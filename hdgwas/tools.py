@@ -697,7 +697,7 @@ class Mapper(object):
         return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys
 
     # @timing
-    def get(self, chunk_number=None, allow_missingness=False):
+    def get(self, chunk_number=None, allow_missingness=False, chromosomes=False):
 
         if isinstance(self.keys, type(None)) and isinstance(self.values, type(None)):
             raise ValueError('mapper data is not loaded!')
@@ -706,7 +706,7 @@ class Mapper(object):
             raise ValueError('chunk_size and should be defined')
 
         if self.processed == self.n_keys:
-            return None, None
+            return (None, None, None) if chromosomes else (None, None)
 
         if chunk_number is not None:
             start = chunk_number[0]
@@ -839,6 +839,10 @@ class Mapper(object):
 
         if len(indices_for_values_with_all_studies_available) == 0:
             return None, None
+
+        if chromosomes:
+            chromosome_array = self.reference.index.select('reference').CHR[indices_for_values_with_all_studies_available]
+            return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys, chromosome_array.values
 
         return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys
 

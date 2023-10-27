@@ -79,7 +79,7 @@ class ClassicMetaAnalyser:
         return cohort_list
 
     def analyse_genotype_chunk(self, genotype, variant_names, variant_indices,
-                               chunk=None, node=None):
+                               chunk=None, node=None, chromosomes=None):
 
         self.prepare_cohorts(variant_indices, variant_names)
 
@@ -93,11 +93,11 @@ class ClassicMetaAnalyser:
                 cohort.analyse(genotype, phenotype)
 
             # Now do the classic meta-analysis
-            self.meta_analyse(variant_names, phenotype_names)
+            self.meta_analyse(variant_names, phenotype_names, chromosomes)
             self.save_results(chunk=chunk, node=node)
             self.save_results_per_cohort(
                 variant_names, phenotype_names,
-                chunk=chunk, node=node)
+                chunk=chunk, node=node, chromosomes=chromosomes)
             self.results_index += 1
             if self._debug:
                 self.write_debug()
@@ -131,7 +131,7 @@ class ClassicMetaAnalyser:
             # data structures.
             cohort.finalize_partial_derivatives()
 
-    def meta_analyse(self, variant_names, phenotype_names):
+    def meta_analyse(self, variant_names, phenotype_names, chromosomes):
         """
         Meta analysis for all associations.
 
@@ -139,6 +139,7 @@ class ClassicMetaAnalyser:
 
         For combining the results between cohorts, we complete the matrices
         with all missing values for ease of use.
+        :param chromosomes:
         :param variant_names:
         :param phenotype_names:
 
@@ -160,6 +161,7 @@ class ClassicMetaAnalyser:
         # Now create the cartesian product of all variant, phenotype names
         test_combinations = np.vstack(
             (np.repeat(variant_names, phenotype_names.shape[0]),
+             np.repeat(chromosomes, phenotype_names.shape[0]),
              np.tile(phenotype_names, variant_names.shape[0]))).T
 
         # From these combinations we can remove all that are nan in all cohorts
@@ -219,16 +221,18 @@ class ClassicMetaAnalyser:
         self.set_results(meta_analysed_effect_sizes,
                          meta_analysed_standard_error,
                          meta_analysis_sample_sizes,
+                         chromosomes,
                          i_squared,
                          test_combinations)
 
     def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error,
-                    meta_analysis_sample_sizes, i_squared,
+                    meta_analysis_sample_sizes, chromosomes, i_squared,
                     test_combinations):
 
         results_dataframe = pd.DataFrame({
             "variant": test_combinations[:, 0],
-            "phenotype": test_combinations[:, 1],
+            "chromosome": test_combinations[:, 1],
+            "phenotype": test_combinations[:, 2],
             "beta": meta_analysed_effect_sizes,
             "standard_error": meta_analysed_standard_error,
             "i_squared": i_squared,
@@ -270,20 +274,28 @@ class ClassicMetaAnalyser:
             print(results.dtypes)
 
             pyarrow_schema = pa.schema(
-                [("variant", pa.string()),
-                 ("phenotype", pa.string()),
+                [("phenotype", pa.string()),
+                 ("chromosome", pa.int8()),
+                 ("variant", pa.string()),
                  ("beta", pa.float64()),
                  ("standard_error", pa.float64()),
                  ("i_squared", pa.float64()),
                  ("sample_size", pa.float64())])
 
-            pq.write_table(pa.Table.from_pandas(
-                results, pyarrow_schema), output_path)
+            results.columns = [col.decode('utf-8') for col in results.columns]
+
+            results['variant'] = results['variant'].str.decode('utf-8')
+            results['phenotype'] = results['phenotype'].str.decode('utf-8')
+
+            pq.write_to_dataset(
+                table=pa.Table.from_pandas(results, pyarrow_schema),
+                root_path=os.path.join(self.out, "meta"),
+                partition_cols=["phenotype".decode('utf-8')])
 
         self.results = None
 
     def save_results_per_cohort(
-            self, variant_names, phenotype_names, chunk=None, node=None):
+            self, variant_names, phenotype_names, chunk=None, node=None, chromosomes=None):
 
         print('Saving results to {}'.format(self.out))
 
@@ -339,18 +351,20 @@ class ClassicMetaAnalyser:
 
         variant_phenotype_multiindex = pd.MultiIndex.from_arrays(
             [np.repeat(variant_names[variant_selection], repeats=phenotype_selection.sum()),
+             np.repeat(chromosomes[variant_selection], repeats=phenotype_selection.sum()),
              np.tile(phenotype_names[phenotype_selection], reps=variant_selection.sum())])
 
         results_per_cohort = pd.concat([
             pd.DataFrame(
                 statistic,
                 index=self.get_cohort_names(),
-                columns=variant_phenotype_multiindex).stack([0,1])
+                columns=variant_phenotype_multiindex).stack([0,1,2])
             for statistic in [effect_sizes, standard_error, sample_sizes]],
             axis=1, keys=["beta", "standard_error", "sample_size"])
 
-        results_per_cohort.index = (results_per_cohort.index
-            .set_names(['cohort', 'variant', 'phenotype']))
+        results_per_cohort.index = (
+            results_per_cohort.index
+            .set_names(['cohort', 'variant', 'chromosome', 'phenotype']))
 
         results_per_cohort = results_per_cohort.reset_index()
 
@@ -365,27 +379,36 @@ class ClassicMetaAnalyser:
             pyarrow_schema = pa.schema(
                 [("cohort", pa.string()),
                  ("variant", pa.string()),
+                 ("chromosome", pa.int8()),
                  ("phenotype", pa.string()),
                  ("beta", pa.float64()),
                  ("standard_error", pa.float64()),
                  ("sample_size", pa.float64())])
 
-            pq.write_table(pa.Table.from_pandas(
-                results_per_cohort, pyarrow_schema), output_path)
+            results_per_cohort.columns = [col.decode('utf-8') for col in results_per_cohort.columns]
+
+            results_per_cohort['variant'] = results_per_cohort['variant'].str.decode('utf-8')
+            results_per_cohort['phenotype'] = results_per_cohort['phenotype'].str.decode('utf-8')
+            results_per_cohort['cohort'] = results_per_cohort['cohort'].str.decode('utf-8')
+
+            pq.write_to_dataset(
+                table=pa.Table.from_pandas(results_per_cohort, pyarrow_schema),
+                root_path=os.path.join(self.out, "cohort"),
+                partition_cols=["phenotype".decode('utf-8'), "cohort".decode('utf-8')])
+
+        self.results = None
+
+    def get_output_label(self, chunk, node, per_cohort=False):
+        if chunk is None:
+            return str(self.results_index) + ('_per_cohort.' if per_cohort else '_result.')
+        else:
+            return "_".join(['node', str(node), str(chunk[0]), str(chunk[1]), str(self.results_index),
+                             ('per_cohort.' if per_cohort else 'result.')])
 
     def get_output_path(self, chunk, node, per_cohort=False):
-        if chunk is None:
-            output_path = os.path.join(
-                self.out,
-                str(self.results_index)
-                + ('per_cohort.' if per_cohort else 'result.')
-                + self.output_type)
-        else:
-            output_path = os.path.join(
-                self.out,
-                "_".join(['node', str(node), str(chunk[0]), str(chunk[1]), str(self.results_index),
-                          ('per_cohort.' if per_cohort else 'result.') + self.output_type]))
-        return output_path
+        return os.path.join(self.out,
+                            self.get_output_label(chunk, node, per_cohort)
+                            + self.output_type)
 
     def get_effect_sizes(self):
         """

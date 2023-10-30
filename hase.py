@@ -5,7 +5,6 @@ import os
 import numpy as np
 
 from config import MAPPER_CHUNK_SIZE, basedir, CONVERTER_SPLIT_SIZE, PYTHON_PATH
-from hdgwas.matrix_decomposition import MatrixDecomposer
 from hdgwas.meta_classic import CohortAnalyser
 from hdgwas.meta_classic import ClassicMetaAnalyser
 

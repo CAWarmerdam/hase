@@ -45,7 +45,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         # self.test_dir = tempfile.mkdtemp()
         self.resources_dir = os.path.join(os.path.dirname(__file__), "resources")
         self.project_root = os.path.dirname(os.path.dirname(__file__))
-        self.dataset = "largedataset"
+        self.dataset = "freqdataset"
         self.data_dir = os.path.join(self.resources_dir, "%s" % self.dataset)
 
         self.test_dir = os.path.join(self.project_root, "unittests", self.dataset, "out")
@@ -291,8 +291,8 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         classic_meta_analyser = self.construct_classic_meta_analyser(
             allow_missingness, gen, variants_of_interest, phenotypes_of_interest)
 
-        variant_indices, variant_names = mapper.get(
-            allow_missingness=allow_missingness)
+        variant_indices, variant_names, chromosomes = mapper.get(
+            allow_missingness=allow_missingness, chromosomes=True)
         genotype = merge_genotype(gen, variant_indices, mapper)
 
         classic_meta_analyser.prepare_cohorts(
@@ -310,7 +310,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             # Now do the classic meta-analysis
             classic_meta_analyser.save_results_per_cohort(
                 variant_names, phenotype_names,
-                chunk=None, node=None)
+                chunk=None, node=None, chromosomes=chromosomes)
 
     def construct_classic_meta_analyser(self, allow_missingness, gen,
                                         variants_of_interest = None,

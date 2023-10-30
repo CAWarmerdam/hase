@@ -102,7 +102,7 @@ class TestDataGenerator:
         return cohort_individual_indices
 
     def get_individual_ids(self, index_lower, index_upper):
-        return np.array(["S{}".format(i) for i in range(index_lower, index_upper)])
+        return np.array(["{}".format(i) for i in range(index_lower, index_upper)])
 
     def set_test_data(self, independent_variable_matrix, phenotype_matrix):
         self.independent_variable_matrix = independent_variable_matrix
@@ -534,13 +534,14 @@ class TestDataGenerator:
 def generate_dataset_with_missingness(
         variants_data_frame,
         number_of_phenotypes,
-        number_of_covariates, base_output_path, fit_models=True):
+        number_of_covariates, base_output_path, fit_models=True, number_of_individuals_per_cohort=(200, 300, 400)):
     # We want to assign variant names so that genotype data can be properly written.
     test_data_generator = TestDataGenerator(
         variants_data_frame,
         number_of_phenotypes,
         number_of_covariates,
-        base_output_path, "test")
+        base_output_path, "test",
+        number_of_individuals_per_cohort)
     test_data_generator.generate_test_data()
     # Generate
     variant_indices = test_data_generator.generate_variant_indices()
@@ -634,15 +635,18 @@ def main(argv=None):
     #     )
 
     ref = sample_variants_from_ref(
-        100, ids=["rs10689341", "rs1227495434"],
+        100,
         reference_path="../resources/alleleflips/hase_reference/1000G-30x.ref.gz")
     generate_dataset_with_missingness(
         variants_data_frame=ref,
         number_of_phenotypes=20,
         number_of_covariates=10,
-        base_output_path="../resources/complexindels/",
-        fit_models=False
+        base_output_path="../resources/numericidentifiers/",
+        fit_models=False,
+        number_of_individuals_per_cohort=(200, 100)
         )
+
+    return 0
 
     #
     #0.0152091253548861

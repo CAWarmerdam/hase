@@ -807,46 +807,9 @@ def main(argv=None):
             covariate_indices=covariate_indices, maf_threshold=args.maf,
             t_statistic_threshold=args.thr)
 
-        # Start looping over all genotype chunks
-        # We use while true, since implementing an iterator is apparently
-        # too much work...
-        while True:
-            # We start with an empty chunk...
-            ch = None
-
-            # Then we check whether or not we are working in an environment
-            # wherein analysis is split over multiple nodes.
-
-            # This determines how the current chunk should be obtained.
-            if mapper.cluster == 'n':
-                variant_indices, keys, chromosomes = mapper.get(
-                    allow_missingness=args.allow_missingness, chromosomes=True)
-            elif mapper.cluster == 'y':
-                ch = mapper.chunk_pop()
-                if ch is None:
-                    break
-                variant_indices, keys, chromosomes = mapper.get(
-                    chunk_number=ch, allow_missingness=args.allow_missingness, chromosomes=True)
-
-            # Now we can check if we have looped through all genotype chunks...
-            if isinstance(variant_indices, type(None)):
-                break
-
-            # And we can get the genotypes for this chunk...
-            if is_no_b4_present_in_partial_derivatives:
-                with Timer() as t_g:
-                    genotype = merge_genotype(gen, variant_indices, mapper)
-                print("Time to get G {}s".format(t_g.secs))
-
-            # Now analyse the genotype chunk
-            if mapper.cluster == 'y':
-                classic_meta_analyser.analyse_genotype_chunk(
-                    genotype, keys, variant_indices,
-                    chunk=ch, node=mapper.node[1], chromosomes=chromosomes)
-            else:
-                classic_meta_analyser.analyse_genotype_chunk(
-                    genotype, keys, variant_indices, chromosomes=chromosomes)
-
+        classic_meta_analyser.run(
+            mapper, gen, allow_missingness=args.allow_missingness,
+            is_no_b4_present_in_partial_derivatives=is_no_b4_present_in_partial_derivatives)
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################
 

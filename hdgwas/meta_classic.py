@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pyarrow.feather as ft
 
 from hdgwas.hdregression import B4, \
     get_a_inverse_extended, hase_supporting_interactions, HASE
-from hdgwas.tools import Timer, HaseAnalyser, select_identifiers
+from hdgwas.tools import Timer, HaseAnalyser, select_identifiers, merge_genotype
 
 
 class HaseException(Exception):
@@ -17,6 +18,15 @@ class HaseException(Exception):
 
 
 class ClassicMetaAnalyser:
+    PYARROW_SCHEMA_META = pa.schema(
+        [("phenotype", pa.string()),
+         ("chromosome", pa.int8()),
+         ("variant", pa.string()),
+         ("beta", pa.float64()),
+         ("standard_error", pa.float64()),
+         ("i_squared", pa.float64()),
+         ("sample_size", pa.float64())])
+
     def __init__(self, meta_phen, meta_pard, sample_intersection, sample_indices, study_names, out,
                  covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None, 
                  variants_full_log=None,
@@ -34,7 +44,7 @@ class ClassicMetaAnalyser:
             meta_pard, sample_intersection, sample_indices,
             study_names, covariate_indices=covariate_indices,
             maf_threshold=maf_threshold)
-        self.output_type = "parquet"
+        self.output_type = "feather"
         self.results = None
         self.results_index = 0
         self._debug = True
@@ -90,18 +100,27 @@ class ClassicMetaAnalyser:
                 # phenotypes and genotypes
                 cohort.set_phenotype_names(phenotype_names)
                 cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
-                cohort.analyse(genotype, phenotype)
 
-            # Now do the classic meta-analysis
-            self.meta_analyse(variant_names, phenotype_names, chromosomes)
-            self.save_results(chunk=chunk, node=node)
-            self.save_results_per_cohort(
-                variant_names, phenotype_names,
-                chunk=chunk, node=node, chromosomes=chromosomes)
-            self.results_index += 1
-            if self._debug:
-                self.write_debug()
+            self._analyse_genotype_chunk(
+                genotype, variant_names,
+                phenotype, phenotype_names,
+                chunk, node, chromosomes)
 
+    def _analyse_genotype_chunk(self, genotype, variant_names, phenotype, phenotype_names,
+                                chunk=None, node=None, chromosomes=None):
+
+        for cohort in self.cohort_list:
+            cohort.analyse(genotype, phenotype)
+
+        # Now do the classic meta-analysis
+        self.meta_analyse(variant_names, phenotype_names, chromosomes)
+        self.save_results(chunk=chunk, node=node)
+        self.save_results_per_cohort(
+            variant_names, phenotype_names,
+            chunk=chunk, node=node, chromosomes=chromosomes)
+        self.results_index += 1
+        if self._debug:
+            self.write_debug()
 
     def prepare_cohorts(self, variant_indices, variant_names):
         # First, prepare the genotype data for this chunk, per cohort
@@ -221,12 +240,11 @@ class ClassicMetaAnalyser:
         self.set_results(meta_analysed_effect_sizes,
                          meta_analysed_standard_error,
                          meta_analysis_sample_sizes,
-                         chromosomes,
                          i_squared,
                          test_combinations)
 
     def set_results(self, meta_analysed_effect_sizes, meta_analysed_standard_error,
-                    meta_analysis_sample_sizes, chromosomes, i_squared,
+                    meta_analysis_sample_sizes, i_squared,
                     test_combinations):
 
         results_dataframe = pd.DataFrame({
@@ -247,6 +265,7 @@ class ClassicMetaAnalyser:
 
         sufficient_sample_size_mask = results_dataframe.sample_size != 0
         selection = np.logical_and(t_statistic_mask, sufficient_sample_size_mask)
+
         self.results = results_dataframe[selection]
 
     def write_debug(self):
@@ -273,24 +292,47 @@ class ClassicMetaAnalyser:
         elif self.output_type == "parquet":
             print(results.dtypes)
 
-            pyarrow_schema = pa.schema(
-                [("phenotype", pa.string()),
-                 ("chromosome", pa.int8()),
-                 ("variant", pa.string()),
-                 ("beta", pa.float64()),
-                 ("standard_error", pa.float64()),
-                 ("i_squared", pa.float64()),
-                 ("sample_size", pa.float64())])
-
             results.columns = [col.decode('utf-8') for col in results.columns]
 
             results['variant'] = results['variant'].str.decode('utf-8')
             results['phenotype'] = results['phenotype'].str.decode('utf-8')
 
             pq.write_to_dataset(
-                table=pa.Table.from_pandas(results, pyarrow_schema),
+                table=pa.Table.from_pandas(results, self.PYARROW_SCHEMA_META),
                 root_path=os.path.join(self.out, "meta"),
                 partition_cols=["phenotype".decode('utf-8')])
+
+        elif self.output_type == "feather":
+            results.columns = [col.decode('utf-8') for col in results.columns]
+
+            results['variant'] = results['variant'].str.decode('utf-8')
+            results['phenotype'] = results['phenotype'].str.decode('utf-8')
+
+            for name, group in results.groupby("phenotype".decode('utf-8'), sort=False):
+                output_path_group = os.path.join(self.out, "meta", "phenotype={}".format(name))
+                try:
+                    os.makedirs(output_path_group)
+                except OSError:
+                    pass
+                filename = os.path.join(output_path_group, "file_{}.feather".format(self.results_index))
+                ft.write_feather(
+                    group,
+                    filename)
+
+        elif self.output_type == "npy_partitioned":
+            results.columns = [col.decode('utf-8') for col in results.columns]
+
+            results['variant'] = results['variant'].str.decode('utf-8')
+            results['phenotype'] = results['phenotype'].str.decode('utf-8')
+
+            for name, group in results.groupby("phenotype".decode('utf-8')):
+                output_path_group = os.path.join(self.out, "meta", "phenotype={}".format(name))
+                try:
+                    os.makedirs(output_path_group)
+                except OSError:
+                    pass
+                filename = os.path.join(output_path_group, "file_{}.npy".format(self.results_index))
+                np.save(filename, group)
 
         self.results = None
 
@@ -396,6 +438,32 @@ class ClassicMetaAnalyser:
                 root_path=os.path.join(self.out, "cohort"),
                 partition_cols=["phenotype".decode('utf-8'), "cohort".decode('utf-8')])
 
+        elif self.output_type == "feather":
+
+            results_per_cohort.columns = [col.decode('utf-8') for col in results_per_cohort.columns]
+
+            results_per_cohort['variant'] = results_per_cohort['variant'].str.decode('utf-8')
+            results_per_cohort['phenotype'] = results_per_cohort['phenotype'].str.decode('utf-8')
+            results_per_cohort['cohort'] = results_per_cohort['cohort'].str.decode('utf-8')
+
+            for key, group in results_per_cohort.groupby(["phenotype".decode('utf-8'), "cohort".decode('utf-8')]):
+                phenotype = key[0]
+                cohort = key[1]
+
+                output_path_group = os.path.join(
+                    self.out, "cohort",
+                    "cohort={}".format(cohort),
+                    "phenotype={}".format(phenotype))
+                try:
+                    os.makedirs(output_path_group)
+                except OSError:
+                    pass
+
+                filename = os.path.join(output_path_group, "file_{}.feather".format(self.results_index))
+                ft.write_feather(
+                    group,
+                    filename)
+
         self.results = None
 
     def get_output_label(self, chunk, node, per_cohort=False):
@@ -440,6 +508,60 @@ class ClassicMetaAnalyser:
 
     def get_cohort_names(self):
         return [cohort.study_name for cohort in self.cohort_list]
+
+    def run(self, mapper, gen, allow_missingness=True,
+            is_no_b4_present_in_partial_derivatives=False):
+
+        for phenotype, phenotype_names, phenotype_indices in self.meta_phen:
+
+            for cohort in self.cohort_list:
+                # Now we need to do the analysis with the selected
+                # phenotypes and genotypes
+                cohort.set_phenotype_names(phenotype_names)
+                cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
+
+            variant_indices = None
+            # Start looping over all genotype chunks
+            # We use while true, since implementing an iterator is apparently
+            # too much work...
+            while True:
+                # We start with an empty chunk...
+                ch = None
+                node = None
+                chromosomes = np.array([])
+
+                # Then we check whether or not we are working in an environment
+                # wherein analysis is split over multiple nodes.
+
+                # This determines how the current chunk should be obtained.
+                if mapper.cluster == 'n':
+                    variant_indices, variant_names, chromosomes = mapper.get(
+                        allow_missingness=allow_missingness, chromosomes=True)
+                elif mapper.cluster == 'y':
+                    ch = mapper.chunk_pop()
+                    node = mapper.node[1]
+                    if ch is None:
+                        break
+                    variant_indices, variant_names, chromosomes = mapper.get(
+                        chunk_number=ch, allow_missingness=allow_missingness, chromosomes=True)
+
+                # Now we can check if we have looped through all genotype chunks...
+                if isinstance(variant_indices, type(None)):
+                    break
+
+                # And we can get the genotypes for this chunk...
+                if is_no_b4_present_in_partial_derivatives:
+                    with Timer() as t_g:
+                        genotype = merge_genotype(gen, variant_indices, mapper)
+                    print("Time to get G {}s".format(t_g.secs))
+
+                self.prepare_cohorts(variant_indices, variant_names)
+
+                # Now analyse the genotype chunk
+                self._analyse_genotype_chunk(
+                    genotype, variant_names,
+                    phenotype, phenotype_names,
+                    ch, node, chromosomes)
 
 
 class CohortAnalyser:

@@ -838,10 +838,12 @@ class Mapper(object):
         indexes = self.values[indices_for_values_with_all_studies_available, :]
 
         if len(indices_for_values_with_all_studies_available) == 0:
+            if chromosomes:
+                return None, None, None
             return None, None
 
         if chromosomes:
-            chromosome_array = self.reference.index.select('reference').CHR[indices_for_values_with_all_studies_available]
+            chromosome_array = self.reference.chromosome_array[indices_for_values_with_all_studies_available]
             return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys, chromosome_array.values
 
         return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys
@@ -896,6 +898,7 @@ class Mapper(object):
 class Reference(object):
 
     def __init__(self, name="1000Gp1v3_ref", path=None):
+        self.chromosome_array = None
         self.name = name
         if path is None:
             self.path_default = os.path.join(os.environ['HASEDIR'], 'data')
@@ -918,18 +921,18 @@ class Reference(object):
             if self.path.get(self.name) is not None:
                 try:
                     self.dataframe = pd.read_csv(self.path[self.name]['table'], compression='gzip', sep=' ',
-                                                 chunksize=self.chunk)
+                                                 chunksize=self.chunk, dtype={'ID': 'str'})
                 except:
-                    self.dataframe = pd.read_csv(self.path[self.name]['table'], sep=' ', chunksize=self.chunk)
+                    self.dataframe = pd.read_csv(self.path[self.name]['table'], sep=' ', chunksize=self.chunk, dtype={'ID': 'str'})
                 self.loaded = True
             else:
                 if os.path.isfile(os.path.join(self.path_default, self.name)):
                     try:
                         self.dataframe = pd.read_csv(os.path.join(self.path_default, self.name), compression='gzip',
-                                                     sep=' ', chunksize=self.chunk)
+                                                     sep=' ', chunksize=self.chunk, dtype={'ID': 'str'})
                     except:
                         self.dataframe = pd.read_csv(os.path.join(self.path_default, self.name), sep=' ',
-                                                     chunksize=self.chunk)
+                                                     chunksize=self.chunk, dtype={'ID': 'str'})
                     self.loaded = True
                     self.name = os.path.basename(self.name)
                 else:
@@ -945,6 +948,7 @@ class Reference(object):
                 self.index = pd.HDFStore(os.path.join(self.path_default, self.name), 'r')
             else:
                 raise ValueError('There is {} no index file {}'.format(self.path_default, self.name))
+        self.chromosome_array = self.index.select('reference').CHR
 
     def next(self):
         df = self.dataframe.get_chunk()

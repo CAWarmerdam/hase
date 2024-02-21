@@ -179,12 +179,12 @@ class HaseExecutor:
                             ["-mode", mode],
                             ["-allow_missingness"],
                             # ["-snp_id_log", self.variant_ids_logging_path],
-                            ["-ph_id_log", self.phenotype_ids_logging_path],
+                            # ["-ph_id_log", self.phenotype_ids_logging_path],
                             # ["--covariate-indices", "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/resources/freqdataset/covariate_indices_test.txt"],
                             ["-maf", "0.05"]]
-        covariate_indices_path = self.get_covariate_indices_path()
-        if covariate_indices_path:
-            command_of_lists.append(["--covariate-indices", covariate_indices_path])
+        #covariate_indices_path = self.get_covariate_indices_path()
+        #if covariate_indices_path:
+        #    command_of_lists.append(["--covariate-indices", covariate_indices_path])
         if self.nodes_n is not None and self.node_i is not None:
             command_of_lists.append(
                 ["-node", self.nodes_n, self.node_i, "-cluster", "y"])
@@ -249,21 +249,21 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    resources_dir = os.path.join("..", "resources")
+    resources_dir = os.path.join("..", "..", "test")
     project_root = os.path.join("..", "..")
-    dataset = "freqdataset"
+    dataset = "ExampleStudy"
     data_dir = os.path.join(resources_dir, "%s" % dataset)
 
-    test_dir = os.path.join(project_root, "unittests", dataset, "out")
+    test_dir = os.path.join(project_root, "test", "out", dataset)
     if not os.path.exists(test_dir):
         os.makedirs(test_dir)
 
-    study_names = ["test_0", "test_1", "test_2"]
+    study_names = ["example_study"]
 
     hase_executor = HaseExecutor(test_dir, project_root,
-                                 study_names)
-    hase_executor.nodes_n = 2
-    hase_executor.node_i = 1
+                                 study_names, new_mapper_options=True)
+    # hase_executor.nodes_n = None
+    # hase_executor.node_i = None
 
     hase_executor.meta_analyse(data_dir)
 

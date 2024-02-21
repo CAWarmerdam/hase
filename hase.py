@@ -29,6 +29,7 @@ from hdgwas.regression import haseregression
 import pandas as pd
 import time
 from hdgwas.protocol import Protocol
+from memory_profiler import profile
 
 __version__ = '1.1.0'
 
@@ -40,6 +41,9 @@ HEAD += "* Erasmus MC, Rotterdam /  Department of Medical Informatics, Radiology
 HEAD += "* GNU General Public License v3\n"
 HEAD += "*********************************************************************\n"
 
+ANALYSE_OVER = "phenotypes_first"
+
+@profile
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -118,6 +122,15 @@ def main(argv=None):
         "-ph_id_log", type=str, nargs='+',
         help="path to file with phenotype ids for which to log per-cohort results."
              "Only used with classic meta-analysis")
+    parser.add_argument(
+        '-pair_log', type=str, nargs='+',
+        help="path to comma-separated file with variant and gene ids in the "
+             "first and second column respectively."
+    )
+    parser.add_argument(
+        '-thr_full_log', type=float, default=None,
+        help="Effects to write per-cohort effects for."
+    )
 
     # parser.add_argument("-ind_id_inc", type=str, help="path to file with individuals id to include to analysis") #TODO (low)
     # parser.add_argument("-ind_id_exc", type=str, help="path to file with individuals id to exclude from analysis")#TODO (low)
@@ -805,11 +818,55 @@ def main(argv=None):
             args.study_name, args.out,
             variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
             covariate_indices=covariate_indices, maf_threshold=args.maf,
-            t_statistic_threshold=args.thr)
+            t_statistic_threshold=args.thr, t_threshold_full_log=args.thr_full_log)
 
-        classic_meta_analyser.run(
-            mapper, gen, allow_missingness=args.allow_missingness,
-            is_no_b4_present_in_partial_derivatives=is_no_b4_present_in_partial_derivatives)
+        if ANALYSE_OVER == "phenotypes_first":
+            classic_meta_analyser.run(
+                mapper, gen, allow_missingness=args.allow_missingness,
+                is_no_b4_present_in_partial_derivatives=is_no_b4_present_in_partial_derivatives)
+
+        elif ANALYSE_OVER == "genotypes_first":
+            # Start looping over all genotype chunks
+            # We use while true, since implementing an iterator is apparently
+            # too much work...
+            while True:
+                # We start with an empty chunk...
+                ch = None
+
+                # Then we check whether or not we are working in an environment
+                # wherein analysis is split over multiple nodes.
+
+                # This determines how the current chunk should be obtained.
+                if mapper.cluster == 'n':
+                    variant_indices, keys, chromosomes = mapper.get(
+                        allow_missingness=args.allow_missingness, chromosomes=True)
+                elif mapper.cluster == 'y':
+                    ch = mapper.chunk_pop()
+                    if ch is None:
+                        break
+                    variant_indices, keys, chromosomes = mapper.get(
+                        chunk_number=ch, allow_missingness=args.allow_missingness, chromosomes=True)
+
+                # Now we can check if we have looped through all genotype chunks...
+                if isinstance(variant_indices, type(None)):
+                    break
+
+                # And we can get the genotypes for this chunk...
+                if is_no_b4_present_in_partial_derivatives:
+                    with Timer() as t_g:
+                        genotype = merge_genotype(gen, variant_indices, mapper)
+                    print("Time to get G {}s".format(t_g.secs))
+
+                # Now analyse the genotype chunk
+                if mapper.cluster == 'y':
+                    classic_meta_analyser.analyse_genotype_chunk(
+                        genotype, keys, variant_indices,
+                        chunk=ch, node=mapper.node[1], chromosomes=chromosomes)
+                else:
+                    classic_meta_analyser.analyse_genotype_chunk(
+                        genotype, keys, variant_indices, chromosomes=chromosomes)
+
+
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################
 

@@ -12,6 +12,7 @@ import numpy as np
 # TODO: implement test for missingness in genotype thingy (new getter)
 import pandas as pd
 import pyarrow.parquet as pq
+import pyarrow.feather as ft
 
 from hase import load_mapper
 from hdgwas import hdregression, meta_classic
@@ -236,12 +237,12 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                                                                  self.hase_executor.results_directory,
                                                                  maf_threshold=0.05, t_statistic_threshold=0)
 
-        variant_indices, keys = mapper.get(
+        variant_indices, variant_names = mapper.get(
             allow_missingness=allow_missingness)
         genotype = merge_genotype(gen, variant_indices, mapper)
 
         classic_meta_analyser.prepare_cohorts(
-            variant_indices, keys)
+            variant_indices, variant_names)
 
         for phenotype, phenotype_names, phenotype_indices in classic_meta_analyser.meta_phen:
 
@@ -259,7 +260,9 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             self.compare_actual_matrix_to_expected(
                 actual_b4_data_frame, expected_b4_data_frame[required_phenotype_names])
 
-            cohort.analyse(genotype, phenotype)
+            cohort.analyse(variant_indices, variant_names,
+                           genotype, phenotype,
+                           classic_meta_analyser.meta_pard)
             actual_betas = pd.DataFrame(
                 cohort.get_betas(),
                 columns=cohort.get_phenotype_names(phenotype_names),
@@ -295,9 +298,6 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             allow_missingness=allow_missingness, chromosomes=True)
         genotype = merge_genotype(gen, variant_indices, mapper)
 
-        classic_meta_analyser.prepare_cohorts(
-            variant_indices, variant_names)
-
         for phenotype, phenotype_names, phenotype_indices in classic_meta_analyser.meta_phen:
 
             for cohort in classic_meta_analyser.cohort_list:
@@ -305,7 +305,9 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                 # phenotypes and genotypes
                 cohort.set_phenotype_names(phenotype_names)
                 cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
-                cohort.analyse(genotype, phenotype)
+                cohort.analyse(variant_indices, variant_names,
+                               genotype, phenotype,
+                               classic_meta_analyser.meta_pard)
 
             # Now do the classic meta-analysis
             classic_meta_analyser.save_results_per_cohort(
@@ -406,11 +408,15 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         # Load actual results
         file_names_pkl = glob.glob(os.path.join(self.hase_executor.results_directory, "*result.pkl"))
         file_names_parquet = glob.glob(os.path.join(self.hase_executor.results_directory, "*result.parquet"))
+        file_names_feather = glob.glob(
+            os.path.join(self.hase_executor.results_directory, "meta", "phenotype=*", "*.feather"))
 
         if len(file_names_parquet) > 0:
             actual_results = pd.concat([pq.read_table(f).to_pandas() for f in file_names_parquet])
         elif len(file_names_pkl) > 0:
             actual_results = pd.concat([pd.read_pickle(f) for f in file_names_pkl])
+        elif len(file_names_feather) > 0:
+            actual_results = pd.concat([ft.read_feather(f) for f in file_names_feather])
         else:
             self.fail("No output present")
         expected_results = pd.read_csv(

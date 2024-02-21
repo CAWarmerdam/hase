@@ -11,7 +11,6 @@ import pyarrow.feather as ft
 from hdgwas.hdregression import B4, \
     get_a_inverse_extended, hase_supporting_interactions, HASE
 from hdgwas.tools import Timer, HaseAnalyser, select_identifiers, merge_genotype
-from memory_profiler import profile
 
 class HaseException(Exception):
     pass
@@ -108,7 +107,6 @@ class ClassicMetaAnalyser:
                 genotype, phenotype, phenotype_names,
                 chunk, node, chromosomes)
 
-    @profile
     def _analyse_genotype_chunk(self, variant_indices, variant_names, genotype, phenotype, phenotype_names,
                                 chunk=None, node=None, chromosomes=None):
 
@@ -545,7 +543,6 @@ class ClassicMetaAnalyser:
     def get_cohort_names(self):
         return [cohort.study_name for cohort in self.cohort_list]
 
-    @profile
     def run(self, mapper, gen, allow_missingness=True,
             is_no_b4_present_in_partial_derivatives=False):
 

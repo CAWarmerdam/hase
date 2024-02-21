@@ -12,7 +12,6 @@ from hdgwas.hdregression import B4, \
     get_a_inverse_extended, hase_supporting_interactions, HASE
 from hdgwas.tools import Timer, HaseAnalyser, select_identifiers, merge_genotype
 
-
 class HaseException(Exception):
     pass
 
@@ -28,10 +27,14 @@ class ClassicMetaAnalyser:
          ("sample_size", pa.float64())])
 
     def __init__(self, meta_phen, meta_pard, sample_intersection, sample_indices, study_names, out,
-                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None, 
+                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None,
                  variants_full_log=None,
-                 pheno_full_log=None):
+                 pheno_full_log=None, variant_phenotype_pairs_full_log=None,
+                 t_threshold_full_log = None):
 
+        self.meta_analysis_passed_t_threshold = None
+        self.t_threshold_full_log = t_threshold_full_log
+        self.variant_phenotype_pairs_full_log = variant_phenotype_pairs_full_log
         self.pheno_full_log = (
             pheno_full_log if pheno_full_log is not None else np.array([]))
         self.variants_full_log = (
@@ -91,8 +94,6 @@ class ClassicMetaAnalyser:
     def analyse_genotype_chunk(self, genotype, variant_names, variant_indices,
                                chunk=None, node=None, chromosomes=None):
 
-        self.prepare_cohorts(variant_indices, variant_names)
-
         for phenotype, phenotype_names, phenotype_indices in self.meta_phen:
 
             for cohort in self.cohort_list:
@@ -102,15 +103,16 @@ class ClassicMetaAnalyser:
                 cohort.set_phenotype_indices(phenotype_indices[cohort.study_index])
 
             self._analyse_genotype_chunk(
-                genotype, variant_names,
-                phenotype, phenotype_names,
+                variant_indices, variant_names,
+                genotype, phenotype, phenotype_names,
                 chunk, node, chromosomes)
 
-    def _analyse_genotype_chunk(self, genotype, variant_names, phenotype, phenotype_names,
+    def _analyse_genotype_chunk(self, variant_indices, variant_names, genotype, phenotype, phenotype_names,
                                 chunk=None, node=None, chromosomes=None):
 
         for cohort in self.cohort_list:
-            cohort.analyse(genotype, phenotype)
+            cohort.analyse(variant_indices, variant_names,
+                           genotype, phenotype, self.meta_pard)
 
         # Now do the classic meta-analysis
         self.meta_analyse(variant_names, phenotype_names, chromosomes)
@@ -118,9 +120,11 @@ class ClassicMetaAnalyser:
         self.save_results_per_cohort(
             variant_names, phenotype_names,
             chunk=chunk, node=node, chromosomes=chromosomes)
-        self.results_index += 1
         if self._debug:
             self.write_debug()
+        self.results = None
+        self.t_threshold_full_log = None
+        self.results_index += 1
 
     def prepare_cohorts(self, variant_indices, variant_names):
         # First, prepare the genotype data for this chunk, per cohort
@@ -334,12 +338,44 @@ class ClassicMetaAnalyser:
                 filename = os.path.join(output_path_group, "file_{}.npy".format(self.results_index))
                 np.save(filename, group)
 
-        self.results = None
-
     def save_results_per_cohort(
             self, variant_names, phenotype_names, chunk=None, node=None, chromosomes=None):
 
         print('Saving results to {}'.format(self.out))
+
+        standard_errors_per_cohort = self.get_standard_error()
+        effect_sizes_per_cohort = self.get_effect_sizes()
+
+        effects_to_report = np.full_like(effect_sizes_per_cohort, False, dtype=bool)
+
+        # Set all variant, phenotype combinations to true that where passed by a custom file
+        if self.variant_phenotype_pairs_full_log is not None:
+            for index, (variant, phenotype) in self.variant_phenotype_pairs_full_log:
+                effects_to_report[:,
+                    np.where(variant_names == variant),
+                    np.where(phenotype_names == phenotype)] = True
+
+        # Set all variant, phenotype combinations to true passing a certain
+        # threshold in either the meta analysis or the per-cohort analysis
+        if self.t_threshold_full_log is not None and self.t_threshold_full_log != 0:
+            # Per cohort store sumstats for every effect that is significant
+            # in either the meta-analysis, or the specific cohort
+            variant_phenotype_pairs_to_report = (
+                self.results.loc[
+                    np.abs(self.results['beta']
+                           / self.results['standard_error']) > self.t_threshold_full_log, ['variant', 'phenotype']]
+            )
+
+            for index, (variant, phenotype) in variant_phenotype_pairs_to_report.iterrows():
+                effects_to_report[:,
+                    np.where(variant_names == variant),
+                    np.where(phenotype_names == phenotype)] = True
+
+            t_statistic_mask_per_cohort = (
+                    np.abs(effect_sizes_per_cohort / standard_errors_per_cohort)
+                    > self.t_threshold_full_log)
+
+            effects_to_report |= t_statistic_mask_per_cohort
 
         variant_selection = np.isin(variant_names, self.variants_full_log)
         phenotype_selection = np.isin(phenotype_names, self.pheno_full_log)
@@ -349,12 +385,14 @@ class ClassicMetaAnalyser:
         # 1st dimension represents the variants, and the
         # 2nd dimension represents the phenotypes.
 
-        effects_to_report = np.dot(
+        effects_to_report[:, np.dot(
             variant_selection[:, None],
-            phenotype_selection[None, :])
+            phenotype_selection[None, :])] = True
 
         per_cohort_threshold = 1 * 10 ** 6
-        if len(self.pheno_full_log) == 0:
+        if np.any(effects_to_report):
+            pass
+        elif len(self.pheno_full_log) == 0:
             print("No phenotypes provided for per cohort results. "
                   + "Trying to write per cohort results for all phenotypes.")
             phenotype_selection = np.array([True] * len(phenotype_names))
@@ -385,28 +423,26 @@ class ClassicMetaAnalyser:
             return
 
         effect_sizes = (
-            self.get_effect_sizes()[:, effects_to_report])
+            effect_sizes_per_cohort[effects_to_report])
         standard_error = (
-            self.get_standard_error()[:, effects_to_report])
+            standard_errors_per_cohort[effects_to_report])
         sample_sizes = (
-            self.get_sample_sizes()[:, effects_to_report])
+            self.get_sample_sizes()[effects_to_report])
 
-        variant_phenotype_multiindex = pd.MultiIndex.from_arrays(
-            [np.repeat(variant_names[variant_selection], repeats=phenotype_selection.sum()),
-             np.repeat(chromosomes[variant_selection], repeats=phenotype_selection.sum()),
-             np.tile(phenotype_names[phenotype_selection], reps=variant_selection.sum())])
+        indices = np.where(effects_to_report)
 
         results_per_cohort = pd.concat([
             pd.DataFrame(
-                statistic,
-                index=self.get_cohort_names(),
-                columns=variant_phenotype_multiindex).stack([0,1,2])
-            for statistic in [effect_sizes, standard_error, sample_sizes]],
-            axis=1, keys=["beta", "standard_error", "sample_size"])
+                {name: statistic})
+            for name, statistic in zip(["beta", "standard_error", "sample_size"], [effect_sizes, standard_error, sample_sizes])],
+            axis=1)
 
-        results_per_cohort.index = (
-            results_per_cohort.index
-            .set_names(['cohort', 'variant', 'chromosome', 'phenotype']))
+        results_per_cohort.index = pd.MultiIndex.from_arrays(
+            [np.array(self.get_cohort_names())[indices[0]],
+             variant_names[indices[1]],
+             chromosomes[indices[1]],
+             phenotype_names[indices[2]]],
+            names=['cohort', 'variant', 'chromosome', 'phenotype'])
 
         results_per_cohort = results_per_cohort.reset_index()
 
@@ -463,8 +499,6 @@ class ClassicMetaAnalyser:
                 ft.write_feather(
                     group,
                     filename)
-
-        self.results = None
 
     def get_output_label(self, chunk, node, per_cohort=False):
         if chunk is None:
@@ -555,11 +589,9 @@ class ClassicMetaAnalyser:
                         genotype = merge_genotype(gen, variant_indices, mapper)
                     print("Time to get G {}s".format(t_g.secs))
 
-                self.prepare_cohorts(variant_indices, variant_names)
-
                 # Now analyse the genotype chunk
                 self._analyse_genotype_chunk(
-                    genotype, variant_names,
+                    variant_indices, variant_names, genotype,
                     phenotype, phenotype_names,
                     ch, node, chromosomes)
 
@@ -796,7 +828,31 @@ class CohortAnalyser:
         phenotype_names = self.phenotype_names[phenotype_filter]
         return phenotype_names
 
-    def analyse(self, genotype, phenotype):
+    def analyse(self, variant_indices, variant_names, genotype, phenotype, meta_pard):
+        print("Preparing cohort named '{}'".format(self.study_name))
+        self.set_variant_names(variant_names)
+        # Get the partial derivatives for each study
+        with Timer() as t_pd:
+            # Extract the partial derivatives from the data sources
+            a_test, b_cov, C, a_cov = meta_pard.get_single_study(
+                study_name=self.study_name,
+                study_index=self.study_index,
+                variant_indices=variant_indices)
+
+        print("Time to get PD {}s".format(t_pd.secs))
+
+        # Add the partial derivatives for this cohort
+        self.set_partial_derivatives(a_test, b_cov, C, a_cov)
+        # Add the maf filter for this cohort
+        self.set_observed_maf(meta_pard.minor_allele_frequencies_study(
+            SNPs_index=variant_indices,
+            study_name=self.study_name,
+            study_index=self.study_index))
+        self.set_variant_indices(variant_indices[self.study_index])
+        self.set_variant_filter(self.maf_filter())
+        # Apply filters on partial derivatives and calculate processed
+        # data structures.
+        self.finalize_partial_derivatives()
 
         # Check if there are phenotypes in this chunk
         # If not, the _analyse function will fail.

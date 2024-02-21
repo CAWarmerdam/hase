@@ -29,7 +29,6 @@ from hdgwas.regression import haseregression
 import pandas as pd
 import time
 from hdgwas.protocol import Protocol
-from memory_profiler import profile
 
 __version__ = '1.1.0'
 
@@ -43,7 +42,6 @@ HEAD += "*********************************************************************\n
 
 ANALYSE_OVER = "phenotypes_first"
 
-@profile
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]

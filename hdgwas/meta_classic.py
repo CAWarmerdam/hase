@@ -389,7 +389,7 @@ class ClassicMetaAnalyser:
             variant_selection[:, None],
             phenotype_selection[None, :])] = True
 
-        per_cohort_threshold = 1 * 10 ** 6
+        per_cohort_threshold = 1 * 10 ** 7 * effects_to_report.shape[0]
         if np.any(effects_to_report):
             pass
         elif len(self.pheno_full_log) == 0:

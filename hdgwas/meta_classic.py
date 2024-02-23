@@ -397,9 +397,9 @@ class ClassicMetaAnalyser:
                   + "Trying to write per cohort results for all phenotypes.")
             phenotype_selection = np.array([True] * len(phenotype_names))
 
-            effects_to_report = np.dot(
+            effects_to_report[:, np.dot(
                 variant_selection[:, None],
-                phenotype_selection[None, :])
+                phenotype_selection[None, :])] = True
 
             if np.sum(effects_to_report) > per_cohort_threshold:
                 Warning("Refusing to write over {} effects for each cohort.".format(per_cohort_threshold))
@@ -408,9 +408,9 @@ class ClassicMetaAnalyser:
         elif len(self.variants_full_log) == 0:
             variant_selection = np.array([True] * len(variant_names))
 
-            effects_to_report = np.dot(
+            effects_to_report[:, np.dot(
                 variant_selection[:, None],
-                phenotype_selection[None, :])
+                phenotype_selection[None, :])] = True
 
             if np.sum(effects_to_report) > per_cohort_threshold:
                 Warning("Refusing to write over {} effects for each cohort.".format(per_cohort_threshold))

@@ -95,7 +95,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         while True:
             variant_indices, keys = mapper.get(
-                allow_missingness=False)
+                allowed_missingness_rate=0)
 
             if isinstance(variant_indices, type(None)):
                 break
@@ -110,6 +110,55 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         self.assertTrue(np.array_equal(
             actual_genotypes,
             expected_genotypes.loc[actual_keys, :].values))
+
+    def test_mapperGetLimitedMissingness(self):
+        """
+        Compare expected variant_indices,
+        as created when generating testing data,
+        with the actual variant_indices as returned by the
+        mapper.get(allow_missingness=T) method.
+
+        Make sure the
+        """
+        # TODO: test that the number of variants is according to what is expected
+
+        expected_genotypes = self.expected_genotypes()
+
+        mapper = load_mapper(
+            mapper_chunk_size=30, study_name=self.hase_executor.study_names,
+            ref_name=self.hase_executor.ref_name,
+            mapper_folder=self.hase_executor.get_meta_mapper_folder(),
+            encoded=[0] * len(self.hase_executor.study_names),
+            cluster=None, node=None,
+            snp_id_inc=None, snp_id_exc=None)
+
+        gen = []
+        for i, study_name in enumerate(self.hase_executor.study_names):
+            gen.append(Reader('genotype'))
+            gen[i].start(os.path.join(self.data_dir, study_name, "genotypes_hdf5"),
+                         hdf5=True, study_name=study_name, ID=False)
+
+        keys_list = list()
+        actual_genotypes_list = list()
+
+        while True:
+            variant_indices, keys = mapper.get(
+                allowed_missingness_rate=0.5)
+
+            if isinstance(variant_indices, type(None)):
+                break
+
+            keys_list.append(keys)
+
+            actual_genotypes_list.append(merge_genotype(gen, variant_indices, mapper))
+
+        actual_genotypes = np.concatenate(actual_genotypes_list)
+        actual_keys = np.concatenate(keys_list)
+
+        self.assertTrue(np.array_equal(
+            actual_genotypes,
+            expected_genotypes.loc[actual_keys, :].values))
+
 
     def test_mapperGetMissingness(self):
         """
@@ -142,7 +191,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         while True:
             variant_indices, keys = mapper.get(
-                allow_missingness=True)
+                allowed_missingness_rate=1)
 
             if isinstance(variant_indices, type(None)):
                 break
@@ -158,10 +207,11 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             actual_genotypes,
             expected_genotypes.loc[actual_keys, :].values))
 
+
     def test_CohortAnalyser(self):
         study_name = "test_2"
         study_index = 2
-        allow_missingness = True
+        max_missingness_rate = 1
 
         genotypes_path = os.path.join(self.data_dir, study_name, "genotypes.csv")
         genotypes = pd.read_csv(genotypes_path, delimiter="\t", index_col='ID')
@@ -205,7 +255,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
 
         meta_pard = MetaParData(partial_derivatives_folders, self.hase_executor.study_names,
                                 protocol=None,
-                                allow_missingness=allow_missingness)
+                                allowed_missingness_rate=max_missingness_rate)
 
         phen = []
         for i, j in enumerate(self.hase_executor.run_func_all_studies(
@@ -214,7 +264,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             phen[i].start(j)
 
         meta_phen = MetaPhenotype(phen,
-                                  include=None, exclude=None, allow_missingness=allow_missingness)
+                                  include=None, exclude=None, allowed_missingness_rate=max_missingness_rate)
         meta_phen.chunk_size = 5
 
         gen = []
@@ -238,7 +288,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                                                                  maf_threshold=0.05, t_statistic_threshold=0)
 
         variant_indices, variant_names = mapper.get(
-            allow_missingness=allow_missingness)
+            allowed_missingness_rate=max_missingness_rate)
         genotype = merge_genotype(gen, variant_indices, mapper)
 
         classic_meta_analyser.prepare_cohorts(
@@ -272,7 +322,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                 actual_betas, expected_betas[required_phenotype_names])
 
     def test_per_cohort_results(self):
-        allow_missingness = True
+        max_missingness_rate = 1
 
         mapper = load_mapper(
             mapper_chunk_size=200, study_name=self.hase_executor.study_names,
@@ -292,10 +342,10 @@ class TestClassicMetaAnalyser(unittest.TestCase):
         phenotypes_of_interest = np.array(["pheno_13", "pheno_09"])
 
         classic_meta_analyser = self.construct_classic_meta_analyser(
-            allow_missingness, gen, variants_of_interest, phenotypes_of_interest)
+            max_missingness_rate, gen, variants_of_interest, phenotypes_of_interest)
 
         variant_indices, variant_names, chromosomes = mapper.get(
-            allow_missingness=allow_missingness, chromosomes=True)
+            allowed_missingness_rate=max_missingness_rate, chromosomes=True)
         genotype = merge_genotype(gen, variant_indices, mapper)
 
         for phenotype, phenotype_names, phenotype_indices in classic_meta_analyser.meta_phen:
@@ -314,7 +364,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
                 variant_names, phenotype_names,
                 chunk=None, node=None, chromosomes=chromosomes)
 
-    def construct_classic_meta_analyser(self, allow_missingness, gen,
+    def construct_classic_meta_analyser(self, max_missingness_rate, gen,
                                         variants_of_interest = None,
                                         phenotypes_of_interest = None):
         partial_derivatives_folders = []
@@ -325,14 +375,14 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             partial_derivatives_folders[i].folder.load()
         meta_pard = MetaParData(partial_derivatives_folders, self.hase_executor.study_names,
                                 protocol=None,
-                                allow_missingness=allow_missingness)
+                                allowed_missingness_rate=max_missingness_rate)
         phen = []
         for i, j in enumerate(self.hase_executor.run_func_all_studies(
                 self.hase_executor.get_meta_phenotype_folder)):
             phen.append(Reader('phenotype'))
             phen[i].start(j)
         meta_phen = MetaPhenotype(phen,
-                                  include=None, exclude=None, allow_missingness=allow_missingness)
+                                  include=None, exclude=None, allowed_missingness_rate=max_missingness_rate)
         meta_phen.chunk_size = 5
 
         # Create a dictionary with the datasets for obtaining
@@ -381,7 +431,7 @@ class TestClassicMetaAnalyser(unittest.TestCase):
             phen[i].start(os.path.join(self.data_dir, study_name, "phenotypes"))
         meta_phen = MetaPhenotype(
             phen,
-            include=None, exclude=None, allow_missingness=True)
+            include=None, exclude=None, allowed_missingness_rate=1)
         return meta_phen
 
     def expected_genotypes(self):

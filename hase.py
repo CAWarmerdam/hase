@@ -157,8 +157,9 @@ def main(argv=None):
     parser.add_argument('-permute_ph', action='store_true', default=False, help='Flag for phenotype permutation')
     parser.add_argument('-vcf', action='store_true', default=False, help='Flag for VCF data to convert')
     parser.add_argument('-np', action='store_true', default=True, help='Check BLAS/LAPACK/MKL')
-    parser.add_argument('-allow_missingness', action='store_true', default=False,
-                        help='Flag for using missingness, instead of using default implementation for meta-analysis.')
+    parser.add_argument('-max-missingness-rate', default=0.0, type=float,
+                        help='Parameter for allowing missingness. Must be >= 0 (allow no missingness) and < 1 (allow all missingness). '
+                             'The default is 0. (allow no missingness).')
 
     # TODO (low) save genotype after MAF
     ###
@@ -518,13 +519,13 @@ def main(argv=None):
         while True:
             if mapper.cluster == 'n':
                 variant_indices, keys = mapper.get(
-                    allow_missingness=args.allow_missingness)
+                    allowed_missingness_rate=args.max_missingness_rate)
             else:
                 ch = mapper.chunk_pop()
                 if ch is None:
                     variant_indices = None
                     break
-                variant_indices, keys = mapper.get(chunk_number=ch, allow_missingness=args.allow_missingness)
+                variant_indices, keys = mapper.get(chunk_number=ch, allowed_missingness_rate=args.max_missingness_rate)
 
             if isinstance(variant_indices, type(None)):
                 break
@@ -556,7 +557,7 @@ def main(argv=None):
                     # If we allow for missingness in the variants. We should consider each of the variants separately
                     # In some way.
                     # In the get_expanded method we
-                    if args.allow_missingness:
+                    if args.max_missingness_rate != 0:
                         a_test, a_cov_stack, b_cov_stack, c_full_stack = meta_pard.get_expanded(
                             variant_indices=variant_indices, regression_model=regression_model,
                             random_effect_intercept=args.effect_intercept)
@@ -565,7 +566,7 @@ def main(argv=None):
                                                                 regression_model=regression_model,
                                                                 random_effect_intercept=args.effect_intercept)
                 else:
-                    if args.allow_missingness:
+                    if args.max_missingness_rate != 0:
                         a_test, a_cov_stack, b_cov_stack, c_full_stack, b4 = meta_pard.get_expanded(
                             variant_indices=variant_indices, regression_model=regression_model,
                             random_effect_intercept=args.effect_intercept)
@@ -581,7 +582,7 @@ def main(argv=None):
             sample_size = meta_pard.get_n_id()
 
             # Check if missingness is allowed.
-            if args.allow_missingness:
+            if args.max_missingness_rate != 0:
                 # If missingness is defined, define the sample size by a matrix of dimensions nVariants * nPhenotypes,
                 # with every combination portraying the number of samples available to test that combination.
                 sample_size = expand_sample_size_matrix(
@@ -606,7 +607,7 @@ def main(argv=None):
 
             # Use new A_inverse that supports variable number of non-constant A parts
             # a_inv = A_inverse(a_cov, a_test)
-            if args.allow_missingness:
+            if args.args.max_missingness_rate != 0:
                 a_inv = a_inverse_extended_allow_missingness(a_test, a_cov_stack, variant_indices)
             else:
                 a_inv, _ = get_a_inverse_extended(a_cov, a_test)
@@ -741,7 +742,7 @@ def main(argv=None):
 
         meta_pard = MetaParData(partial_derivatives_folders, args.study_name,
                                 protocol=protocol,
-                                allow_missingness=args.allow_missingness,
+                                allowed_missingness_rate=args.max_missingness_rate,
                                 match_covs=False)
         # Do nothing with cov order
 
@@ -759,7 +760,7 @@ def main(argv=None):
         meta_phen = MetaPhenotype(phen,
                                   include=args.ph_id_inc,
                                   exclude=args.ph_id_exc,
-                                  allow_missingness=args.allow_missingness)
+                                  allowed_missingness_rate=args.max_missingness_rate)
 
         gen = []
         with Timer() as t:
@@ -819,7 +820,7 @@ def main(argv=None):
 
         if ANALYSE_OVER == "phenotypes_first":
             classic_meta_analyser.run(
-                mapper, gen, allow_missingness=args.allow_missingness,
+                mapper, gen, allowed_missingness_rate=args.max_missingness_rate,
                 is_no_b4_present_in_partial_derivatives=is_no_b4_present_in_partial_derivatives)
 
         elif ANALYSE_OVER == "genotypes_first":
@@ -836,13 +837,13 @@ def main(argv=None):
                 # This determines how the current chunk should be obtained.
                 if mapper.cluster == 'n':
                     variant_indices, keys, chromosomes = mapper.get(
-                        allow_missingness=args.allow_missingness, chromosomes=True)
+                        allowed_missingness_rate=args.max_missingness_rate, chromosomes=True)
                 elif mapper.cluster == 'y':
                     ch = mapper.chunk_pop()
                     if ch is None:
                         break
                     variant_indices, keys, chromosomes = mapper.get(
-                        chunk_number=ch, allow_missingness=args.allow_missingness, chromosomes=True)
+                        chunk_number=ch, allowed_missingness_rate=args.max_missingness_rate, chromosomes=True)
 
                 # Now we can check if we have looped through all genotype chunks...
                 if isinstance(variant_indices, type(None)):

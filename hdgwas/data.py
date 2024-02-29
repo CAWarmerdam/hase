@@ -382,15 +382,17 @@ class ParData(Data):
 class MetaPhenotype(object):
 
     def __init__(self, phen, protocol=None, include=None, exclude=None,
-                 allow_missingness=False):
+                 allowed_missingness_rate=0):
         # @timing
-        def _check(map, keys, allow_missingness=False):
+        def _check(map, keys, max_missingness_rate=0):
             values = np.array(map.dic.values())
             result = {}
-            if allow_missingness:
+            if max_missingness_rate == 0:
+                r = (values == -1).any(axis=1)
+            elif max_missingness_rate == 1:
                 r = (values == -1).all(axis=1)
             else:
-                r = (values == -1).any(axis=1)
+                r = (values == -1).mean(axis=1) > max_missingness_rate
             if np.sum(r) == values.shape[0]:
                 raise ValueError('There is no common names between studies')
             for i, k in enumerate(keys):
@@ -442,7 +444,7 @@ class MetaPhenotype(object):
                         new_values[cohort_indices] = np.array(values)[cohort_indices].tolist()
                     self.mapper.dic[phenotype] = new_values.tolist()
 
-            self.order, self.phen_names = _check(self.mapper, self.keys, allow_missingness=allow_missingness)
+            self.order, self.phen_names = _check(self.mapper, self.keys, max_missingness_rate=allowed_missingness_rate)
             self.n_phenotypes = len(self.order[self.keys[0]])
             print ('Loaded {} phenotypes for meta-analysis'.format(self.n_phenotypes))
             self.processed = 0
@@ -557,16 +559,18 @@ class MetaPhenotype(object):
 
 class MetaParData(object):
 
-    def __init__(self, pd, study_names, protocol=None, allow_missingness=False, match_covs=True):
+    def __init__(self, pd, study_names, protocol=None, allowed_missingness_rate=0, match_covs=True):
         # @timing
-        def _check(map, keys, allow_missingness = False):
+        def _check(map, keys, max_missingness_rate=0):
             values = np.array(map.dic.values())
             result = {}
 
-            if allow_missingness:
+            if max_missingness_rate == 0:
+                r = (values == -1).any(axis=1)
+            elif max_missingness_rate == 1:
                 r = (values == -1).all(axis=1)
             else:
-                r = (values == -1).any(axis=1)
+                r = (values == -1).mean(axis=1) > max_missingness_rate
 
             if np.sum(r) == values.shape[0]:
                 raise ValueError('There is no common names between studies')
@@ -590,11 +594,11 @@ class MetaParData(object):
                     self.phen_mapper.fill(k.folder._data.metadata['phenotype'], k.folder.name, reference=False)
                     self.cov_mapper.fill(self.covariates[k], k.folder.name, reference=False)
                 else:
-                    self.phen_mapper.push(k.folder._data.metadata['phenotype'], name=k.folder.name, new_id=allow_missingness)
-                    self.cov_mapper.push(self.covariates[k], name=k.folder.name, new_id=allow_missingness)
+                    self.phen_mapper.push(k.folder._data.metadata['phenotype'], name=k.folder.name, new_id=allowed_missingness_rate > 0)
+                    self.cov_mapper.push(self.covariates[k], name=k.folder.name, new_id=allowed_missingness_rate > 0)
                 keys.append(k.folder.name)
 
-            self.phen_order = _check(self.phen_mapper, keys, allow_missingness)
+            self.phen_order = _check(self.phen_mapper, keys, max_missingness_rate=allowed_missingness_rate)
             if match_covs:
                 self.cov_order = _check(self.cov_mapper, keys)
             else:

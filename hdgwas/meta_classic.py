@@ -30,7 +30,7 @@ class ClassicMetaAnalyser:
                  covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None,
                  variants_full_log=None,
                  pheno_full_log=None, variant_phenotype_pairs_full_log=None,
-                 t_threshold_full_log = None):
+                 t_threshold_full_log=None):
 
         self.meta_analysis_passed_t_threshold = None
         self.t_threshold_full_log = t_threshold_full_log
@@ -543,7 +543,7 @@ class ClassicMetaAnalyser:
     def get_cohort_names(self):
         return [cohort.study_name for cohort in self.cohort_list]
 
-    def run(self, mapper, gen, allow_missingness=True,
+    def run(self, mapper, gen, allowed_missingness_rate=1,
             is_no_b4_present_in_partial_derivatives=False):
 
         for phenotype, phenotype_names, phenotype_indices in self.meta_phen:
@@ -570,14 +570,14 @@ class ClassicMetaAnalyser:
                 # This determines how the current chunk should be obtained.
                 if mapper.cluster == 'n':
                     variant_indices, variant_names, chromosomes = mapper.get(
-                        allow_missingness=allow_missingness, chromosomes=True)
+                        allowed_missingness_rate=allowed_missingness_rate, chromosomes=True)
                 elif mapper.cluster == 'y':
                     ch = mapper.chunk_pop()
                     node = mapper.node[1]
                     if ch is None:
                         break
                     variant_indices, variant_names, chromosomes = mapper.get(
-                        chunk_number=ch, allow_missingness=allow_missingness, chromosomes=True)
+                        chunk_number=ch, allowed_missingness_rate=allowed_missingness_rate, chromosomes=True)
 
                 # Now we can check if we have looped through all genotype chunks...
                 if isinstance(variant_indices, type(None)):

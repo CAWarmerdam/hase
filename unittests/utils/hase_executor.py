@@ -177,7 +177,7 @@ class HaseExecutor:
                             ["-ref_path", self.ref_path],
                             ["-mapper_chunk", "500"],
                             ["-mode", mode],
-                            ["-max-missingness-rate", "1"],
+                            ["-max-missingness-rate", 1],
                             # ["-snp_id_log", self.variant_ids_logging_path],
                             # ["-ph_id_log", self.phenotype_ids_logging_path],
                             # ["--covariate-indices", "/Users/cawarmerdam/Documents/hdaa/hase_repository/unittests/resources/freqdataset/covariate_indices_test.txt"],

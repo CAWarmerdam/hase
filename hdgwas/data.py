@@ -576,7 +576,7 @@ class MetaParData(object):
                 raise ValueError('There is no common names between studies')
             for i, k in enumerate(keys):
                 result[k] = values[~r, i]
-            return result
+            return result, np.array(map.dic.keys())[~r]
 
         self.name = None
         self.study_names = study_names
@@ -598,9 +598,9 @@ class MetaParData(object):
                     self.cov_mapper.push(self.covariates[k], name=k.folder.name, new_id=allowed_missingness_rate > 0)
                 keys.append(k.folder.name)
 
-            self.phen_order = _check(self.phen_mapper, keys, max_missingness_rate=allowed_missingness_rate)
+            self.phen_order, self.phen_names = _check(self.phen_mapper, keys, max_missingness_rate=allowed_missingness_rate)
             if match_covs:
-                self.cov_order = _check(self.cov_mapper, keys)
+                self.cov_order, self.cov_names = _check(self.cov_mapper, keys)
             else:
                 self.cov_order = {
                     key: list(range(0, len(self.covariates[self.pd[key]]))) for key in keys

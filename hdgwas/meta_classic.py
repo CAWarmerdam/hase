@@ -85,9 +85,7 @@ class ClassicMetaAnalyser:
 
             # Add a dictionary as an index matching phenotypes to
             # indices in the partial derivatives C and b_cov
-            keys = meta_pard.phen_mapper.dic.keys()
-            phen_ind_dic = {k: i for i, k in enumerate(keys)}
-            cohort.set_partial_derivatives_phenotype_index(phen_ind_dic)
+            cohort.set_partial_derivatives_phenotype_index(meta_pard)
             cohort_list.append(cohort)
         return cohort_list
 
@@ -625,6 +623,7 @@ class CohortAnalyser:
                  sample_size, covariate_indices=None,
                  maf_threshold=0.0,
                  a_test=None, b_cov=None, C=None, a_cov=None):
+        self.partial_derivatives_phenotype_index = None
         self._covariate_indices = covariate_indices
         self.unknown_dimension_size = 1
         self.sample_size = sample_size
@@ -655,12 +654,16 @@ class CohortAnalyser:
         self._a_test = a_test
         self._a_cov = a_cov
 
-    def set_partial_derivatives_phenotype_index(self, index):
+    def set_partial_derivatives_phenotype_index(self, meta_pard):
         """
         Set partial derivatives phenotype index. :param index: the index should be a dictionary with the names of the
         phenotype as keys, and the accompanying index in the partial derivatives as values.
         """
-        self.partial_derivatives_phenotype_index = index
+        phenotype_names = np.array(meta_pard.phen_names)
+        phen_ind_series = pd.Series(
+            np.arange(0, len(phenotype_names)),
+            index=phenotype_names)
+        self.partial_derivatives_phenotype_index = phen_ind_series
 
     def finalize_partial_derivatives(self):
         a_test = self.get_a_test()
@@ -812,8 +815,7 @@ class CohortAnalyser:
         else:
             print('There are {} common ids in phenotype files and PD data!'.format(
                 len(phenotype_names)))
-        return np.array([self.partial_derivatives_phenotype_index[name]
-                         for name in phenotype_names])
+        return self.partial_derivatives_phenotype_index[phenotype_names].values
 
     def get_sliced_phenotype_names(self):
         # First make a local copy of the phenotype filter

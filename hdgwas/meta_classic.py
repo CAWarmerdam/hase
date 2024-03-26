@@ -121,7 +121,6 @@ class ClassicMetaAnalyser:
         if self._debug:
             self.write_debug()
         self.results = None
-        self.t_threshold_full_log = None
         self.results_index += 1
 
     def prepare_cohorts(self, variant_indices, variant_names):

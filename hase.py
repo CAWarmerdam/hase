@@ -39,6 +39,8 @@ HEAD += "* Erasmus MC, Rotterdam /  Department of Medical Informatics, Radiology
 HEAD += "* GNU General Public License v3\n"
 HEAD += "*********************************************************************\n"
 
+ANALYSE_OVER = "phenotypes_first"
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -117,6 +119,15 @@ def main(argv=None):
         "-ph_id_log", type=str, nargs='+',
         help="path to file with phenotype ids for which to log per-cohort results."
              "Only used with classic meta-analysis")
+    parser.add_argument(
+        '-pair_log', type=str, nargs='+',
+        help="path to comma-separated file with variant and gene ids in the "
+             "first and second column respectively."
+    )
+    parser.add_argument(
+        '-thr_full_log', type=float, default=None,
+        help="Effects to write per-cohort effects for."
+    )
 
     # parser.add_argument("-ind_id_inc", type=str, help="path to file with individuals id to include to analysis") #TODO (low)
     # parser.add_argument("-ind_id_exc", type=str, help="path to file with individuals id to exclude from analysis")#TODO (low)
@@ -146,8 +157,9 @@ def main(argv=None):
     parser.add_argument('-permute_ph', action='store_true', default=False, help='Flag for phenotype permutation')
     parser.add_argument('-vcf', action='store_true', default=False, help='Flag for VCF data to convert')
     parser.add_argument('-np', action='store_true', default=True, help='Check BLAS/LAPACK/MKL')
-    parser.add_argument('-allow_missingness', action='store_true', default=False,
-                        help='Flag for using missingness, instead of using default implementation for meta-analysis.')
+    parser.add_argument('-max-missingness-rate', default=0.0, type=float,
+                        help='Parameter for allowing missingness. Must be >= 0 (allow no missingness) and < 1 (allow all missingness). '
+                             'The default is 0. (allow no missingness).')
 
     # TODO (low) save genotype after MAF
     ###
@@ -334,34 +346,6 @@ def main(argv=None):
 
         print ('Time to encode all data: {} sec'.format(t.secs))
 
-    ################################### DECOMPOSE_B4_MATRIX ############################
-
-    elif args.mode == 'decompose':
-
-        # ARG_CHECKER.check(args,mode='single-meta')
-        mapper = Mapper()
-        mapper.genotype_names = args.study_name
-        mapper.chunk_size = MAPPER_CHUNK_SIZE
-        mapper.reference_name = args.ref_name
-        mapper.reference_path = args.ref_path
-        mapper.load_flip(args.mapper)
-        mapper.load(args.mapper)
-        mapper.cluster = args.cluster
-        mapper.node = args.node
-
-        phen = Reader('phenotype')
-        phen.start(args.phenotype[0])
-
-        gen = Reader('genotype')
-        gen.start(args.genotype[0], hdf5=args.hdf5, study_name=args.study_name[0], ID=False)
-
-        decomposer = MatrixDecomposer(args.out)
-
-        with Timer() as t:
-            decomposer.decompose_matrix(
-                phen=phen, gen=gen, mapper=mapper)
-        print ('Time to compute b4 decomposition : {} sec'.format(t.secs))
-
     ################################### SINGLE META STAGE ##############################
 
     elif args.mode == 'single-meta':
@@ -507,13 +491,13 @@ def main(argv=None):
         while True:
             if mapper.cluster == 'n':
                 variant_indices, keys = mapper.get(
-                    allow_missingness=args.allow_missingness)
+                    allowed_missingness_rate=args.max_missingness_rate)
             else:
                 ch = mapper.chunk_pop()
                 if ch is None:
                     variant_indices = None
                     break
-                variant_indices, keys = mapper.get(chunk_number=ch, allow_missingness=args.allow_missingness)
+                variant_indices, keys = mapper.get(chunk_number=ch, allowed_missingness_rate=args.max_missingness_rate)
 
             if isinstance(variant_indices, type(None)):
                 break
@@ -545,7 +529,7 @@ def main(argv=None):
                     # If we allow for missingness in the variants. We should consider each of the variants separately
                     # In some way.
                     # In the get_expanded method we
-                    if args.allow_missingness:
+                    if args.max_missingness_rate != 0:
                         a_test, a_cov_stack, b_cov_stack, c_full_stack = meta_pard.get_expanded(
                             variant_indices=variant_indices, regression_model=regression_model,
                             random_effect_intercept=args.effect_intercept)
@@ -554,7 +538,7 @@ def main(argv=None):
                                                                 regression_model=regression_model,
                                                                 random_effect_intercept=args.effect_intercept)
                 else:
-                    if args.allow_missingness:
+                    if args.max_missingness_rate != 0:
                         a_test, a_cov_stack, b_cov_stack, c_full_stack, b4 = meta_pard.get_expanded(
                             variant_indices=variant_indices, regression_model=regression_model,
                             random_effect_intercept=args.effect_intercept)
@@ -570,7 +554,7 @@ def main(argv=None):
             sample_size = meta_pard.get_n_id()
 
             # Check if missingness is allowed.
-            if args.allow_missingness:
+            if args.max_missingness_rate != 0:
                 # If missingness is defined, define the sample size by a matrix of dimensions nVariants * nPhenotypes,
                 # with every combination portraying the number of samples available to test that combination.
                 sample_size = expand_sample_size_matrix(
@@ -595,7 +579,7 @@ def main(argv=None):
 
             # Use new A_inverse that supports variable number of non-constant A parts
             # a_inv = A_inverse(a_cov, a_test)
-            if args.allow_missingness:
+            if args.args.max_missingness_rate != 0:
                 a_inv = a_inverse_extended_allow_missingness(a_test, a_cov_stack, variant_indices)
             else:
                 a_inv, _ = get_a_inverse_extended(a_cov, a_test)
@@ -730,7 +714,7 @@ def main(argv=None):
 
         meta_pard = MetaParData(partial_derivatives_folders, args.study_name,
                                 protocol=protocol,
-                                allow_missingness=args.allow_missingness,
+                                allowed_missingness_rate=args.max_missingness_rate,
                                 match_covs=False)
         # Do nothing with cov order
 
@@ -748,7 +732,7 @@ def main(argv=None):
         meta_phen = MetaPhenotype(phen,
                                   include=args.ph_id_inc,
                                   exclude=args.ph_id_exc,
-                                  allow_missingness=args.allow_missingness)
+                                  allowed_missingness_rate=args.max_missingness_rate)
 
         gen = []
         with Timer() as t:
@@ -795,12 +779,55 @@ def main(argv=None):
             meta_phen, meta_pard, intersecting_identifiers, row_index,
             args.study_name, args.out,
             variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
-            selected_covariates=selected_covariates, maf_threshold=args.maf,
-            t_statistic_threshold=args.thr)
+            covariate_indices=selected_covariates, maf_threshold=args.maf,
+            t_statistic_threshold=args.thr, t_threshold_full_log=args.thr_full_log)
 
-        classic_meta_analyser.run(
-            mapper, gen, allow_missingness=args.allow_missingness,
-            is_no_b4_present_in_partial_derivatives=is_no_b4_present_in_partial_derivatives)
+        if ANALYSE_OVER == "phenotypes_first":
+            classic_meta_analyser.run(
+                mapper, gen, allowed_missingness_rate=args.max_missingness_rate,
+                is_no_b4_present_in_partial_derivatives=is_no_b4_present_in_partial_derivatives)
+
+        elif ANALYSE_OVER == "genotypes_first":
+            # Start looping over all genotype chunks
+            # We use while true, since implementing an iterator is apparently
+            # too much work...
+            while True:
+                # We start with an empty chunk...
+                ch = None
+
+                # Then we check whether or not we are working in an environment
+                # wherein analysis is split over multiple nodes.
+
+                # This determines how the current chunk should be obtained.
+                if mapper.cluster == 'n':
+                    variant_indices, keys, chromosomes = mapper.get(
+                        allowed_missingness_rate=args.max_missingness_rate, chromosomes=True)
+                elif mapper.cluster == 'y':
+                    ch = mapper.chunk_pop()
+                    if ch is None:
+                        break
+                    variant_indices, keys, chromosomes = mapper.get(
+                        chunk_number=ch, allowed_missingness_rate=args.max_missingness_rate, chromosomes=True)
+
+                # Now we can check if we have looped through all genotype chunks...
+                if isinstance(variant_indices, type(None)):
+                    break
+
+                # And we can get the genotypes for this chunk...
+                if is_no_b4_present_in_partial_derivatives:
+                    with Timer() as t_g:
+                        genotype = merge_genotype(gen, variant_indices, mapper)
+                    print("Time to get G {}s".format(t_g.secs))
+
+                # Now analyse the genotype chunk
+                if mapper.cluster == 'y':
+                    classic_meta_analyser.analyse_genotype_chunk(
+                        genotype, keys, variant_indices,
+                        chunk=ch, node=mapper.node[1], chromosomes=chromosomes)
+                else:
+                    classic_meta_analyser.analyse_genotype_chunk(
+                        genotype, keys, variant_indices, chromosomes=chromosomes)
+
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################
 

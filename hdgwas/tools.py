@@ -697,7 +697,7 @@ class Mapper(object):
         return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys
 
     # @timing
-    def get(self, chunk_number=None, allow_missingness=False, chromosomes=False):
+    def get(self, chunk_number=None, allowed_missingness_rate=0, chromosomes=False):
 
         if isinstance(self.keys, type(None)) and isinstance(self.values, type(None)):
             raise ValueError('mapper data is not loaded!')
@@ -785,23 +785,26 @@ class Mapper(object):
 
         print("Time to select SNPs {}s".format(t_q.secs))
 
-        if allow_missingness:
+        if allowed_missingness_rate == 1:
             # Get the indices for those values that are present in ANY studies
             # Values that are greater than -1 are present
-            all_indices_for_values_with_all_studies_available = np.where(
+            indices_for_values_to_analyze = np.where(
                 (self.values[:, :] > -1).any(axis=1))[0]
-        else:
+        elif allowed_missingness_rate == 0:
             # Get the indices for those values that are present in ALL studies
             # Values that are greater than -1 are present
-            all_indices_for_values_with_all_studies_available = np.where(
+            indices_for_values_to_analyze = np.where(
                 (self.values[:, :] > -1).all(axis=1))[0]
+        else:
+            indices_for_values_to_analyze = np.where(
+                (1 - (self.values[:, :] > -1).mean(axis=1)) <= allowed_missingness_rate)[0]
 
-        all_indices_for_values_with_all_studies_available = all_indices_for_values_with_all_studies_available[
-            all_indices_for_values_with_all_studies_available >= start]
+        indices_for_values_to_analyze = indices_for_values_to_analyze[
+            indices_for_values_to_analyze >= start]
 
         # Loop over chunks, popping them, while the current chunk does not contain more than self.chunk_size values.
 
-        while np.sum(all_indices_for_values_with_all_studies_available < finish) < self.chunk_size:
+        while np.sum(indices_for_values_to_analyze < finish) < self.chunk_size:
             if self.processed == self.n_keys:
                 break
 
@@ -821,7 +824,7 @@ class Mapper(object):
 
         # Give back the latest chunk if there will be over 1.5 times self.chunk in the values
 
-        if np.sum(all_indices_for_values_with_all_studies_available < finish) > 1.5 * self.chunk_size:
+        if np.sum(indices_for_values_to_analyze < finish) > 1.5 * self.chunk_size:
             if chunk_number is None:
                 self.processed = self.processed = start
                 finish = start
@@ -830,8 +833,8 @@ class Mapper(object):
                 self.chunk_pool.append(ch)
                 finish = ch[0]
 
-        indices_for_values_with_all_studies_available = all_indices_for_values_with_all_studies_available[
-            all_indices_for_values_with_all_studies_available < finish]
+        indices_for_values_with_all_studies_available = indices_for_values_to_analyze[
+            indices_for_values_to_analyze < finish]
 
         keys = self.keys[indices_for_values_with_all_studies_available]
 

@@ -28,7 +28,7 @@ class ClassicMetaAnalyser:
          ("sample_size", pa.float64())])
 
     def __init__(self, meta_phen, meta_pard, sample_intersection, sample_indices, study_names, out,
-                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None, 
+                 selected_covariates=None, maf_threshold=0.0, t_statistic_threshold=None,
                  variants_full_log=None,
                  pheno_full_log=None):
 
@@ -42,7 +42,7 @@ class ClassicMetaAnalyser:
         self.out = out
         self.cohort_list = self.construct_cohort_list(
             meta_pard, sample_intersection, sample_indices,
-            study_names, covariate_indices=covariate_indices,
+            study_names, selected_covariates=selected_covariates,
             maf_threshold=maf_threshold)
         self.output_type = "feather"
         self.results = None
@@ -51,7 +51,7 @@ class ClassicMetaAnalyser:
 
     @staticmethod
     def construct_cohort_list(meta_pard, sample_intersection, sample_indices,
-                              study_names, covariate_indices,
+                              study_names, selected_covariates,
                               maf_threshold=0.0):
         # Build a list of studies / cohorts
         cohort_list = list()
@@ -68,17 +68,17 @@ class ClassicMetaAnalyser:
 
             # Get if covariate indices for this study
             covariate_indices_this_study = None
-            if covariate_indices is not None:
+            if selected_covariates is not None:
                 # If covariate indices are not goven for this study
                 # we can skip these. We make sure a keyerror is not thrown
                 # by using None as a default.
-                covariate_indices_this_study = covariate_indices.get(
+                covariates_this_study = selected_covariates.get(
                     study_name, None)
 
             # Initialize the cohort analysis
             cohort = CohortAnalyser(
                 study_index, study_name, study_row_indices, sample_size,
-                covariate_indices_this_study, maf_threshold=maf_threshold)
+                selected_covariates=selected_covariates, maf_threshold=maf_threshold)
 
             # Add a dictionary as an index matching phenotypes to
             # indices in the partial derivatives C and b_cov
@@ -134,11 +134,12 @@ class ClassicMetaAnalyser:
                     study_name=cohort.study_name,
                     study_index=cohort.study_index,
                     variant_indices=variant_indices)
+                covariate_names = self.meta_pard.get_covariate_names(cohort.study_name)
 
             print("Time to get PD {}s".format(t_pd.secs))
 
             # Add the partial derivatives for this cohort
-            cohort.set_partial_derivatives(a_test, b_cov, C, a_cov)
+            cohort.set_partial_derivatives(a_test, b_cov, C, a_cov, covariates=covariate_names)
             # Add the maf filter for this cohort
             cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
                 SNPs_index=variant_indices,
@@ -590,10 +591,11 @@ class CohortAnalyser:
     """
 
     def __init__(self, study_index, study_name, row_index,
-                 sample_size, covariate_indices=None,
+                 sample_size, selected_covariates=None,
                  maf_threshold=0.0,
                  a_test=None, b_cov=None, C=None, a_cov=None):
-        self._covariate_indices = covariate_indices
+        self._encoded_covariates = None
+        self._selected_covariates = selected_covariates
         self.unknown_dimension_size = 1
         self.sample_size = sample_size
         self._a_cov = a_cov
@@ -614,14 +616,16 @@ class CohortAnalyser:
         self._finalized = False
         self.maf_threshold = maf_threshold
 
-    def set_partial_derivatives(self, a_test, b_cov, C, a_cov):
+    def set_partial_derivatives(self, a_test, b_cov, C, a_cov, covariates):
         """
         Set partial derivatives.
+        :param covariates:
         """
         self._b_cov = b_cov
         self.C = C
         self._a_test = a_test
         self._a_cov = a_cov
+        self._encoded_covariates = covariates
 
     def set_partial_derivatives_phenotype_index(self, index):
         """
@@ -904,7 +908,25 @@ class CohortAnalyser:
         it will also maintain the intercept thingy.
         :return:
         """
-        if self._covariate_indices is None:
-            return np.arange(self._a_cov.shape[0])
+        if self._selected_covariates is None:
+            raise ValueError(
+                'Covariate selection not present for cohort: {}'.format(
+                    self.study_name
+                ))
+            #return np.arange(self._a_cov.shape[0])
 
-        return np.insert(self._covariate_indices, obj=0, values=0, axis=0)
+        covariate_indices = np.where(np.in1d(self._encoded_covariates, self._selected_covariates))[0]
+
+        if len(covariate_indices) < len(self._selected_covariates):
+            missing_covariates = self._selected_covariates[~np.isin(self._selected_covariates,
+                                                                    self._encoded_covariates)]
+            raise ValueError(
+                'Cannot find all covariates for study: {}'
+                'Cannot find: {}'.format(
+                    self.study_name, ", ".join(missing_covariates)
+                ))
+
+        if np.isin(covariate_indices[0], 0):
+            return covariate_indices
+
+        return np.insert(covariate_indices, obj=0, values=0, axis=0)

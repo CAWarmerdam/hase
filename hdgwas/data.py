@@ -841,6 +841,9 @@ class MetaParData(object):
         else:
             return a_test, b_cov, C, a_cov
 
+    def get_covariate_names(self, study_name):
+        return self.covariates[study_name]
+
     def maf_pard(self, SNPs_index=None):
 
         samples = 0

@@ -774,23 +774,15 @@ def main(argv=None):
                     row_index["partial_derivatives"].shape[0],
                     np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders])))
 
-        covariate_indices = None
-        if args.covariate_indices:
+        selected_covariates = None
+        if args.selected_covariates:
 
-            covariate_indices = dict()
+            selected_covariates = dict()
             with open(args.covariate_indices) as opened:
                 for line in opened:
                     split_line = line.strip().split("\t")
-                    covariate_indices[split_line[0]] = (
+                    selected_covariates[split_line[0]] = (
                         np.array([int(index) for index in split_line[1:]]))
-
-            for key, indices in covariate_indices.items():
-                if np.min(indices) < 1:
-                    raise ValueError(
-                        'Lowest covariate index below 1 for cohort {}. '
-                        'Covariate indices must start at 1 or above.'.format(
-                            key
-                        ))
 
         variants_to_log = None
         pheno_to_log = None
@@ -803,7 +795,7 @@ def main(argv=None):
             meta_phen, meta_pard, intersecting_identifiers, row_index,
             args.study_name, args.out,
             variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
-            covariate_indices=covariate_indices, maf_threshold=args.maf,
+            selected_covariates=selected_covariates, maf_threshold=args.maf,
             t_statistic_threshold=args.thr)
 
         classic_meta_analyser.run(

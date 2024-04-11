@@ -779,7 +779,7 @@ def main(argv=None):
             meta_phen, meta_pard, intersecting_identifiers, row_index,
             args.study_name, args.out,
             variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
-            covariate_indices=selected_covariates, maf_threshold=args.maf,
+            selected_covariates=selected_covariates, maf_threshold=args.maf,
             t_statistic_threshold=args.thr, t_threshold_full_log=args.thr_full_log)
 
         if ANALYSE_OVER == "phenotypes_first":

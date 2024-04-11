@@ -80,7 +80,7 @@ def main(argv=None):
     parser.add_argument("-g", "--genotype", nargs='+', type=str, help="path/paths to genotype data folder")
     parser.add_argument("-ph", "--phenotype", nargs='+', type=str, help="path to phenotype data folder")
     parser.add_argument("-cov", "--covariates", type=str, help="path to covariates data folder")
-    parser.add_argument("-ci", "--covariate-indices", type=str,
+    parser.add_argument("-ci", "--selected-covariates", type=str,
                         help="path to tab-delimited file with each row representing "
                              "the indices of covariates to include in the classical meta-analysis")
 
@@ -762,11 +762,17 @@ def main(argv=None):
         if args.selected_covariates:
 
             selected_covariates = dict()
-            with open(args.covariate_indices) as opened:
+            with open(args.selected_covariates) as opened:
                 for line in opened:
                     split_line = line.strip().split("\t")
+                    if split_line[0] not in args.study_name:
+                        print("Cohort in covariate selection {} not in cohort names.".format(split_line[0]))
                     selected_covariates[split_line[0]] = (
-                        np.array([int(index) for index in split_line[1:]]))
+                        np.array(split_line[1:]))
+
+            for study_name in args.study_name:
+                if study_name not in selected_covariates:
+                    print("Cohort {} not in covariate selection.".format(study_name))
 
         variants_to_log = None
         pheno_to_log = None
@@ -779,7 +785,7 @@ def main(argv=None):
             meta_phen, meta_pard, intersecting_identifiers, row_index,
             args.study_name, args.out,
             variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
-            covariate_indices=selected_covariates, maf_threshold=args.maf,
+            selected_covariates=selected_covariates, maf_threshold=args.maf,
             t_statistic_threshold=args.thr, t_threshold_full_log=args.thr_full_log)
 
         if ANALYSE_OVER == "phenotypes_first":

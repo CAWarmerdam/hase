@@ -141,7 +141,7 @@ class ClassicMetaAnalyser:
             print("Time to get PD {}s".format(t_pd.secs))
 
             # Add the partial derivatives for this cohort
-            cohort.set_partial_derivatives(a_test, b_cov, C, a_cov, covariates=covariate_names)
+            cohort.set_partial_derivatives(a_test, b_cov, C, a_cov, covariate_names)
             # Add the maf filter for this cohort
             cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
                 SNPs_index=variant_indices,
@@ -844,11 +844,12 @@ class CohortAnalyser:
                 study_name=self.study_name,
                 study_index=self.study_index,
                 variant_indices=variant_indices)
+            covariate_names = meta_pard.get_covariate_names(self.study_name)
 
         print("Time to get PD {}s".format(t_pd.secs))
 
         # Add the partial derivatives for this cohort
-        self.set_partial_derivatives(a_test, b_cov, C, a_cov)
+        self.set_partial_derivatives(a_test, b_cov, C, a_cov, covariate_names)
         # Add the maf filter for this cohort
         self.set_observed_maf(meta_pard.minor_allele_frequencies_study(
             SNPs_index=variant_indices,

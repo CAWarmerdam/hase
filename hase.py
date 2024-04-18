@@ -729,10 +729,16 @@ def main(argv=None):
                 phen.append(Reader('phenotype'))
                 phen[i].start(j)
         print("Time to set pheno {} s".format(t.secs))
-        meta_phen = MetaPhenotype(phen,
-                                  include=args.ph_id_inc,
-                                  exclude=args.ph_id_exc,
-                                  allowed_missingness_rate=args.max_missingness_rate)
+        try:
+            meta_phen = MetaPhenotype(phen,
+                                      include=args.ph_id_inc,
+                                      exclude=args.ph_id_exc,
+                                      allowed_missingness_rate=args.max_missingness_rate)
+
+        except ValueError as e:
+            if e.message == "There is no common names between studies":
+                print("Too much missingness across cohorts in genes.")
+                return 0
 
         gen = []
         with Timer() as t:

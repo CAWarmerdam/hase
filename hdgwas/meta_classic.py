@@ -81,7 +81,7 @@ class ClassicMetaAnalyser:
             # Initialize the cohort analysis
             cohort = CohortAnalyser(
                 study_index, study_name, study_row_indices, sample_size,
-                selected_covariates=selected_covariates, maf_threshold=maf_threshold)
+                selected_covariates=covariates_this_study, maf_threshold=maf_threshold)
 
             # Add a dictionary as an index matching phenotypes to
             # indices in the partial derivatives C and b_cov
@@ -656,7 +656,7 @@ class CohortAnalyser:
         self.C = C
         self._a_test = a_test
         self._a_cov = a_cov
-        self._encoded_covariates = covariates
+        self._encoded_covariates = ["_".join([self.study_name, covariate]) for covariate in covariates]
 
     def set_partial_derivatives_phenotype_index(self, meta_pard):
         """

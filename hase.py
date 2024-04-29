@@ -778,7 +778,7 @@ def main(argv=None):
 
             for study_name in args.study_name:
                 if study_name not in selected_covariates:
-                    print("Cohort {} not in covariate selection.".format(study_name))
+                    raise ValueError("Cohort {} not in covariate selection.".format(study_name))
 
         variants_to_log = None
         pheno_to_log = None

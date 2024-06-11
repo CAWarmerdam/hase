@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import gc
 
 import numpy as np
 import pandas as pd
@@ -143,12 +144,12 @@ class ClassicMetaAnalyser:
             # Add the partial derivatives for this cohort
             cohort.set_partial_derivatives(a_test, b_cov, C, a_cov, covariate_names)
             # Add the maf filter for this cohort
-            cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
-                SNPs_index=variant_indices,
-                study_name=cohort.study_name,
-                study_index=cohort.study_index))
+            # cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
+            #     SNPs_index=variant_indices,
+            #     study_name=cohort.study_name,
+            #     study_index=cohort.study_index))
             cohort.set_variant_indices(variant_indices[cohort.study_index])
-            cohort.set_variant_filter(cohort.maf_filter())
+            # cohort.set_variant_filter(cohort.maf_filter())
             # Apply filters on partial derivatives and calculate processed
             # data structures.
             cohort.finalize_partial_derivatives()
@@ -879,6 +880,8 @@ class CohortAnalyser:
             # If we have some phenotypes, we can continue.
             self._analyse(genotype, phenotype)
 
+        self._cleanup()
+
     def _analyse(self, genotype, phenotype):
 
         # Get partial derivatives
@@ -989,3 +992,15 @@ class CohortAnalyser:
             return covariate_indices
 
         return np.insert(covariate_indices, obj=0, values=0, axis=0)
+
+    def _cleanup(self):
+        self._b_cov = None
+        self.C = None
+        self._a_test = None
+        self._a_cov = None
+        self._encoded_covariates = None
+        self.a_singular = None
+        self.a_inv = None
+
+        gc.collect()
+

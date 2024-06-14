@@ -80,7 +80,7 @@ def main(argv=None):
     parser.add_argument("-g", "--genotype", nargs='+', type=str, help="path/paths to genotype data folder")
     parser.add_argument("-ph", "--phenotype", nargs='+', type=str, help="path to phenotype data folder")
     parser.add_argument("-cov", "--covariates", type=str, help="path to covariates data folder")
-    parser.add_argument("-ci", "--covariate-indices", type=str,
+    parser.add_argument("-ci", "--selected-covariates", type=str,
                         help="path to tab-delimited file with each row representing "
                              "the indices of covariates to include in the classical meta-analysis")
 
@@ -345,34 +345,6 @@ def main(argv=None):
             print ('Time to create fake phenotype is {}sec'.format(t_phen.secs))
 
         print ('Time to encode all data: {} sec'.format(t.secs))
-
-    ################################### DECOMPOSE_B4_MATRIX ############################
-
-    elif args.mode == 'decompose':
-
-        # ARG_CHECKER.check(args,mode='single-meta')
-        mapper = Mapper()
-        mapper.genotype_names = args.study_name
-        mapper.chunk_size = MAPPER_CHUNK_SIZE
-        mapper.reference_name = args.ref_name
-        mapper.reference_path = args.ref_path
-        mapper.load_flip(args.mapper)
-        mapper.load(args.mapper)
-        mapper.cluster = args.cluster
-        mapper.node = args.node
-
-        phen = Reader('phenotype')
-        phen.start(args.phenotype[0])
-
-        gen = Reader('genotype')
-        gen.start(args.genotype[0], hdf5=args.hdf5, study_name=args.study_name[0], ID=False)
-
-        decomposer = MatrixDecomposer(args.out)
-
-        with Timer() as t:
-            decomposer.decompose_matrix(
-                phen=phen, gen=gen, mapper=mapper)
-        print ('Time to compute b4 decomposition : {} sec'.format(t.secs))
 
     ################################### SINGLE META STAGE ##############################
 
@@ -757,10 +729,16 @@ def main(argv=None):
                 phen.append(Reader('phenotype'))
                 phen[i].start(j)
         print("Time to set pheno {} s".format(t.secs))
-        meta_phen = MetaPhenotype(phen,
-                                  include=args.ph_id_inc,
-                                  exclude=args.ph_id_exc,
-                                  allowed_missingness_rate=args.max_missingness_rate)
+        try:
+            meta_phen = MetaPhenotype(phen,
+                                      include=args.ph_id_inc,
+                                      exclude=args.ph_id_exc,
+                                      allowed_missingness_rate=args.max_missingness_rate)
+
+        except ValueError as e:
+            if e.message == "There is no common names between studies":
+                print("Too much missingness across cohorts in genes.")
+                return 0
 
         gen = []
         with Timer() as t:
@@ -786,23 +764,21 @@ def main(argv=None):
                     row_index["partial_derivatives"].shape[0],
                     np.sum([i.folder._data.metadata['id'].shape[0] for i in partial_derivatives_folders])))
 
-        covariate_indices = None
-        if args.covariate_indices:
+        selected_covariates = None
+        if args.selected_covariates:
 
-            covariate_indices = dict()
-            with open(args.covariate_indices) as opened:
+            selected_covariates = dict()
+            with open(args.selected_covariates) as opened:
                 for line in opened:
                     split_line = line.strip().split("\t")
-                    covariate_indices[split_line[0]] = (
-                        np.array([int(index) for index in split_line[1:]]))
+                    if split_line[0] not in args.study_name:
+                        print("Cohort in covariate selection {} not in cohort names.".format(split_line[0]))
+                    selected_covariates[split_line[0]] = (
+                        np.array(split_line[1:]))
 
-            for key, indices in covariate_indices.items():
-                if np.min(indices) < 1:
-                    raise ValueError(
-                        'Lowest covariate index below 1 for cohort {}. '
-                        'Covariate indices must start at 1 or above.'.format(
-                            key
-                        ))
+            for study_name in args.study_name:
+                if study_name not in selected_covariates:
+                    raise ValueError("Cohort {} not in covariate selection.".format(study_name))
 
         variants_to_log = None
         pheno_to_log = None
@@ -815,7 +791,7 @@ def main(argv=None):
             meta_phen, meta_pard, intersecting_identifiers, row_index,
             args.study_name, args.out,
             variants_full_log=variants_to_log, pheno_full_log=pheno_to_log,
-            covariate_indices=covariate_indices, maf_threshold=args.maf,
+            selected_covariates=selected_covariates, maf_threshold=args.maf,
             t_statistic_threshold=args.thr, t_threshold_full_log=args.thr_full_log)
 
         if ANALYSE_OVER == "phenotypes_first":
@@ -863,7 +839,6 @@ def main(argv=None):
                 else:
                     classic_meta_analyser.analyse_genotype_chunk(
                         genotype, keys, variant_indices, chromosomes=chromosomes)
-
 
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################

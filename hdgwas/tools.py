@@ -842,14 +842,16 @@ class Mapper(object):
 
         if len(indices_for_values_with_all_studies_available) == 0:
             if chromosomes:
+                raise NotImplementedError()
                 return None, None, None
             return None, None
 
         if chromosomes:
-            chromosome_array = self.reference.chromosome_array[indices_for_values_with_all_studies_available]
-            return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys, chromosome_array.values
+            raise NotImplementedError()
+            #chromosome_array = self.reference.chromosome_array[indices_for_values_with_all_studies_available]
+            #return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], indices_for_values_with_all_studies_available, chromosome_array.values
 
-        return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], keys
+        return [indexes[:, i].astype(np.int64) for i in range(self.n_study)], indices_for_values_with_all_studies_available
 
     def get_all(self, name, nonempty=True):
         ind = self.genotype_names.index(name)
@@ -901,7 +903,6 @@ class Mapper(object):
 class Reference(object):
 
     def __init__(self, name="1000Gp1v3_ref", path=None):
-        self.chromosome_array = None
         self.name = name
         if path is None:
             self.path_default = os.path.join(os.environ['HASEDIR'], 'data')
@@ -951,7 +952,6 @@ class Reference(object):
                 self.index = pd.HDFStore(os.path.join(self.path_default, self.name), 'r')
             else:
                 raise ValueError('There is {} no index file {}'.format(self.path_default, self.name))
-        self.chromosome_array = self.index.select('reference').CHR
 
     def next(self):
         df = self.dataframe.get_chunk()

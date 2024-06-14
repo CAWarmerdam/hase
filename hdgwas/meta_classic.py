@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import gc
 
 import numpy as np
 import pandas as pd
@@ -19,15 +20,14 @@ class HaseException(Exception):
 class ClassicMetaAnalyser:
     PYARROW_SCHEMA_META = pa.schema(
         [("phenotype", pa.string()),
-         ("chromosome", pa.int8()),
-         ("variant", pa.string()),
+         ("variant_index", pa.int64()),
          ("beta", pa.float64()),
          ("standard_error", pa.float64()),
          ("i_squared", pa.float64()),
          ("sample_size", pa.float64())])
 
     def __init__(self, meta_phen, meta_pard, sample_intersection, sample_indices, study_names, out,
-                 covariate_indices=None, maf_threshold=0.0, t_statistic_threshold=None,
+                 selected_covariates=None, maf_threshold=0.0, t_statistic_threshold=None,
                  variants_full_log=None,
                  pheno_full_log=None, variant_phenotype_pairs_full_log=None,
                  t_threshold_full_log=None):
@@ -45,16 +45,15 @@ class ClassicMetaAnalyser:
         self.out = out
         self.cohort_list = self.construct_cohort_list(
             meta_pard, sample_intersection, sample_indices,
-            study_names, covariate_indices=covariate_indices,
+            study_names, selected_covariates=selected_covariates,
             maf_threshold=maf_threshold)
         self.output_type = "feather"
         self.results = None
         self.results_index = 0
         self._debug = True
 
-    @staticmethod
-    def construct_cohort_list(meta_pard, sample_intersection, sample_indices,
-                              study_names, covariate_indices,
+    def construct_cohort_list(self, meta_pard, sample_intersection, sample_indices,
+                              study_names, selected_covariates,
                               maf_threshold=0.0):
         # Build a list of studies / cohorts
         cohort_list = list()
@@ -70,18 +69,19 @@ class ClassicMetaAnalyser:
                 study_index, sample_indices, sample_intersection)
 
             # Get if covariate indices for this study
-            covariate_indices_this_study = None
-            if covariate_indices is not None:
+            covariates_this_study = None
+            if selected_covariates is not None:
                 # If covariate indices are not goven for this study
                 # we can skip these. We make sure a keyerror is not thrown
                 # by using None as a default.
-                covariate_indices_this_study = covariate_indices.get(
+                covariates_this_study = selected_covariates.get(
                     study_name, None)
 
             # Initialize the cohort analysis
             cohort = CohortAnalyser(
                 study_index, study_name, study_row_indices, sample_size,
-                covariate_indices_this_study, maf_threshold=maf_threshold)
+                selected_covariates=covariates_this_study, maf_threshold=maf_threshold)
+            cohort.analyser.out = self.out
 
             # Add a dictionary as an index matching phenotypes to
             # indices in the partial derivatives C and b_cov
@@ -108,20 +108,95 @@ class ClassicMetaAnalyser:
     def _analyse_genotype_chunk(self, variant_indices, variant_names, genotype, phenotype, phenotype_names,
                                 chunk=None, node=None, chromosomes=None):
 
+        # Define matrices to do incremental meta-analysis
+        weights_total = np.zeros((len(variant_names), len(phenotype_names)))
+        weighted_effect_sizes_total = np.zeros(weights_total.shape)
+        weighted_effect_sizes_squared_total = np.zeros(weights_total.shape)
+        number_of_cohorts = np.zeros(weights_total.shape)
+
+        # For every cohort, perform analysis, and add to the incremental meta-analysis
         for cohort in self.cohort_list:
+            # Run the analysis for this cohort
             cohort.analyse(variant_indices, variant_names,
                            genotype, phenotype, self.meta_pard)
 
+            self.save_results_per_cohort(cohort, variant_names, phenotype_names)
+
+            # Perform incremental meta-analysis
+            self.incremental_meta_analysis(
+                cohort, number_of_cohorts,
+                weighted_effect_sizes_squared_total, weighted_effect_sizes_total, weights_total)
+
+            # Clear the per-cohort results
+            cohort.analyser.t_stat = None
+            cohort.analyser.standard_error = None
+
+        # Finalize meta-analysis
+        self.finalize_meta_analysis(
+            number_of_cohorts, phenotype_names, variant_names,
+            weighted_effect_sizes_squared_total, weighted_effect_sizes_total, weights_total)
+
         # Now do the classic meta-analysis
-        self.meta_analyse(variant_names, phenotype_names, chromosomes)
         self.save_results(chunk=chunk, node=node)
-        self.save_results_per_cohort(
-            variant_names, phenotype_names,
-            chunk=chunk, node=node, chromosomes=chromosomes)
-        if self._debug:
-            self.write_debug()
         self.results = None
         self.results_index += 1
+
+    def finalize_meta_analysis(self, number_of_cohorts, phenotype_names, variant_names,
+                               weighted_effect_sizes_squared_total, weighted_effect_sizes_total, weights_total):
+
+        # The total weighted effect size should be divided by the
+        # total weight of each of the studies.
+        meta_analysed_effect_sizes = weighted_effect_sizes_total / weights_total
+        meta_analysed_standard_error = np.sqrt(1 / weights_total)
+
+        # Get the Q-statistic as indicated by Borenstein (p. 109, equation 16.3)
+        q_statistic = weighted_effect_sizes_squared_total - (weighted_effect_sizes_total ** 2 / weights_total)
+
+        # Get the correct degrees of freedom
+        degrees_of_freedom = number_of_cohorts - 1
+
+        # Calculate the I2 statistic
+        with np.errstate(divide='ignore', invalid='ignore'):
+            i_squared = np.maximum(0, (q_statistic - degrees_of_freedom) / q_statistic) * 100
+            i_squared[np.isnan(i_squared)] = 101
+
+        # Get the meta-analysed effect sizes
+        meta_analysis_sample_sizes = np.nansum(
+            self.get_sample_sizes(), axis=0)
+
+        # Now create the cartesian product of all variant, phenotype names
+        test_combinations = np.vstack(
+            (np.repeat(variant_names, phenotype_names.shape[0]),
+             np.tile(phenotype_names, variant_names.shape[0]))).T
+
+        # Set the results
+        self.set_results(meta_analysed_effect_sizes.flatten(),
+                         meta_analysed_standard_error.flatten(),
+                         meta_analysis_sample_sizes.flatten(),
+                         i_squared.flatten(),
+                         test_combinations)
+
+    def incremental_meta_analysis(self, cohort, number_of_cohorts,
+                                  weighted_effect_sizes_squared_total, weighted_effect_sizes_total, weights_total):
+
+        # We rely on the methods below to return a 2d matrix wherein the
+        # 0nd dimension represents the variants, and the
+        # 1st dimension represents the phenotypes.
+        effect_sizes = cohort.analyser.get_betas()
+        inverse_variance_weights = 1 / (cohort.analyser.standard_error ** 2)
+
+        # Update the totals
+        weights_total += np.nan_to_num(inverse_variance_weights)
+        weighted_effect_sizes_total += np.nan_to_num(effect_sizes * inverse_variance_weights)
+        weighted_effect_sizes_squared_total += np.nan_to_num(
+            inverse_variance_weights * effect_sizes ** 2)
+
+        # Missing values are expected to be NaN
+        # We should check which phenotype, variant combinations are NaN in all
+        # cohorts. Then we can remove these from the variant and phenotype names
+        number_of_cohorts += ~np.isnan(inverse_variance_weights)
+
+        return
 
     def prepare_cohorts(self, variant_indices, variant_names):
         # First, prepare the genotype data for this chunk, per cohort
@@ -135,23 +210,24 @@ class ClassicMetaAnalyser:
                     study_name=cohort.study_name,
                     study_index=cohort.study_index,
                     variant_indices=variant_indices)
+                covariate_names = self.meta_pard.get_covariate_names(cohort.study_name)
 
             print("Time to get PD {}s".format(t_pd.secs))
 
             # Add the partial derivatives for this cohort
-            cohort.set_partial_derivatives(a_test, b_cov, C, a_cov)
+            cohort.set_partial_derivatives(a_test, b_cov, C, a_cov, covariate_names)
             # Add the maf filter for this cohort
-            cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
-                SNPs_index=variant_indices,
-                study_name=cohort.study_name,
-                study_index=cohort.study_index))
+            # cohort.set_observed_maf(self.meta_pard.minor_allele_frequencies_study(
+            #     SNPs_index=variant_indices,
+            #     study_name=cohort.study_name,
+            #     study_index=cohort.study_index))
             cohort.set_variant_indices(variant_indices[cohort.study_index])
-            cohort.set_variant_filter(cohort.maf_filter())
+            # cohort.set_variant_filter(cohort.maf_filter())
             # Apply filters on partial derivatives and calculate processed
             # data structures.
             cohort.finalize_partial_derivatives()
 
-    def meta_analyse(self, variant_names, phenotype_names, chromosomes):
+    def meta_analyse(self, variant_names, phenotype_names):
         """
         Meta analysis for all associations.
 
@@ -181,7 +257,6 @@ class ClassicMetaAnalyser:
         # Now create the cartesian product of all variant, phenotype names
         test_combinations = np.vstack(
             (np.repeat(variant_names, phenotype_names.shape[0]),
-             np.repeat(chromosomes, phenotype_names.shape[0]),
              np.tile(phenotype_names, variant_names.shape[0]))).T
 
         # From these combinations we can remove all that are nan in all cohorts
@@ -249,9 +324,8 @@ class ClassicMetaAnalyser:
                     test_combinations):
 
         results_dataframe = pd.DataFrame({
-            "variant": test_combinations[:, 0],
-            "chromosome": test_combinations[:, 1],
-            "phenotype": test_combinations[:, 2],
+            "variant_index": test_combinations[:, 0],
+            "phenotype": test_combinations[:, 1],
             "beta": meta_analysed_effect_sizes,
             "standard_error": meta_analysed_standard_error,
             "i_squared": i_squared,
@@ -286,93 +360,52 @@ class ClassicMetaAnalyser:
         results = self.results.loc[self.results.sample_size != 0]
         output_path = self.get_output_path(chunk, node)
 
-        if self.output_type == "npy":
-            np.save(output_path, results)
-        elif self.output_type == "pkl":
-            results.to_pickle(output_path)
-        elif self.output_type == "parquet":
-            print(results.dtypes)
+        results.columns = [col.decode('utf-8') for col in results.columns]
 
-            results.columns = [col.decode('utf-8') for col in results.columns]
+        results['phenotype'] = results['phenotype'].str.decode('utf-8')
 
-            results['variant'] = results['variant'].str.decode('utf-8')
-            results['phenotype'] = results['phenotype'].str.decode('utf-8')
-
-            pq.write_to_dataset(
-                table=pa.Table.from_pandas(results, self.PYARROW_SCHEMA_META),
-                root_path=os.path.join(self.out, "meta"),
-                partition_cols=["phenotype".decode('utf-8')])
-
-        elif self.output_type == "feather":
-            results.columns = [col.decode('utf-8') for col in results.columns]
-
-            results['variant'] = results['variant'].str.decode('utf-8')
-            results['phenotype'] = results['phenotype'].str.decode('utf-8')
-
-            for name, group in results.groupby("phenotype".decode('utf-8'), sort=False):
-                output_path_group = os.path.join(self.out, "meta", "phenotype={}".format(name))
-                try:
-                    os.makedirs(output_path_group)
-                except OSError:
-                    pass
-                filename = os.path.join(output_path_group, "file_{}.feather".format(self.results_index))
-                ft.write_feather(
-                    group,
-                    filename)
-
-        elif self.output_type == "npy_partitioned":
-            results.columns = [col.decode('utf-8') for col in results.columns]
-
-            results['variant'] = results['variant'].str.decode('utf-8')
-            results['phenotype'] = results['phenotype'].str.decode('utf-8')
-
-            for name, group in results.groupby("phenotype".decode('utf-8')):
-                output_path_group = os.path.join(self.out, "meta", "phenotype={}".format(name))
-                try:
-                    os.makedirs(output_path_group)
-                except OSError:
-                    pass
-                filename = os.path.join(output_path_group, "file_{}.npy".format(self.results_index))
-                np.save(filename, group)
+        for name, group in results.groupby("phenotype".decode('utf-8'), sort=False):
+            output_path_group = os.path.join(self.out, "meta", "phenotype={}".format(name))
+            try:
+                os.makedirs(output_path_group)
+            except OSError:
+                pass
+            filename = os.path.join(output_path_group, "file_{}.feather".format(self.results_index))
+            ft.write_feather(
+                group,
+                filename)
 
     def save_results_per_cohort(
-            self, variant_names, phenotype_names, chunk=None, node=None, chromosomes=None):
+            self, cohort, variant_names, phenotype_names):
 
         print('Saving results to {}'.format(self.out))
 
-        standard_errors_per_cohort = self.get_standard_error()
-        effect_sizes_per_cohort = self.get_effect_sizes()
+        # We rely on the methods below to return a 2d matrix wherein the
+        # 0nd dimension represents the variants, and the
+        # 1st dimension represents the phenotypes.
+        effect_sizes = cohort.analyser.get_betas()
+        standard_errors = cohort.analyser.standard_error
 
-        effects_to_report = np.full_like(effect_sizes_per_cohort, False, dtype=bool)
+        effects_to_report = np.full_like(effect_sizes, False, dtype=bool)
 
         # Set all variant, phenotype combinations to true that where passed by a custom file
         if self.variant_phenotype_pairs_full_log is not None:
-            for index, (variant, phenotype) in self.variant_phenotype_pairs_full_log:
-                effects_to_report[:,
-                    np.where(variant_names == variant),
+            for index, (variant_index, phenotype) in self.variant_phenotype_pairs_full_log:
+                effects_to_report[
+                    np.where(variant_names == variant_index),
                     np.where(phenotype_names == phenotype)] = True
 
         # Set all variant, phenotype combinations to true passing a certain
-        # threshold in either the meta analysis or the per-cohort analysis
+        # threshold in the per-cohort analysis
         if self.t_threshold_full_log is not None and self.t_threshold_full_log != 0:
-            # Per cohort store sumstats for every effect that is significant
-            # in either the meta-analysis, or the specific cohort
-            variant_phenotype_pairs_to_report = (
-                self.results.loc[
-                    np.abs(self.results['beta']
-                           / self.results['standard_error']) > self.t_threshold_full_log, ['variant', 'phenotype']]
-            )
-
-            for index, (variant, phenotype) in variant_phenotype_pairs_to_report.iterrows():
-                effects_to_report[:,
-                    np.where(variant_names == variant),
-                    np.where(phenotype_names == phenotype)] = True
-
             t_statistic_mask_per_cohort = (
-                    np.abs(effect_sizes_per_cohort / standard_errors_per_cohort)
+                    np.abs(effects_to_report / standard_errors)
                     > self.t_threshold_full_log)
 
             effects_to_report |= t_statistic_mask_per_cohort
+
+        elif self.t_threshold_full_log is not None:
+            effects_to_report[...] = True
 
         variant_selection = np.isin(variant_names, self.variants_full_log)
         phenotype_selection = np.isin(phenotype_names, self.pheno_full_log)
@@ -382,11 +415,11 @@ class ClassicMetaAnalyser:
         # 1st dimension represents the variants, and the
         # 2nd dimension represents the phenotypes.
 
-        effects_to_report[:, np.dot(
+        effects_to_report[np.dot(
             variant_selection[:, None],
             phenotype_selection[None, :])] = True
 
-        per_cohort_threshold = 1 * 10 ** 7 * effects_to_report.shape[0]
+        per_cohort_threshold = 1 * 10 ** 7
         if np.any(effects_to_report):
             pass
         elif len(self.pheno_full_log) == 0:
@@ -394,7 +427,7 @@ class ClassicMetaAnalyser:
                   + "Trying to write per cohort results for all phenotypes.")
             phenotype_selection = np.array([True] * len(phenotype_names))
 
-            effects_to_report[:, np.dot(
+            effects_to_report[np.dot(
                 variant_selection[:, None],
                 phenotype_selection[None, :])] = True
 
@@ -405,7 +438,7 @@ class ClassicMetaAnalyser:
         elif len(self.variants_full_log) == 0:
             variant_selection = np.array([True] * len(variant_names))
 
-            effects_to_report[:, np.dot(
+            effects_to_report[np.dot(
                 variant_selection[:, None],
                 phenotype_selection[None, :])] = True
 
@@ -419,83 +452,49 @@ class ClassicMetaAnalyser:
         if not np.any(effects_to_report):
             return
 
-        effect_sizes = (
-            effect_sizes_per_cohort[effects_to_report])
-        standard_error = (
-            standard_errors_per_cohort[effects_to_report])
-        sample_sizes = (
-            self.get_sample_sizes()[effects_to_report])
+        effect_sizes_to_report = (
+            effect_sizes[effects_to_report])
+        standard_error_to_report = (
+            standard_errors[effects_to_report])
 
         indices = np.where(effects_to_report)
 
         results_per_cohort = pd.concat([
             pd.DataFrame(
                 {name: statistic})
-            for name, statistic in zip(["beta", "standard_error", "sample_size"], [effect_sizes, standard_error, sample_sizes])],
+            for name, statistic in zip(["beta", "standard_error"], [effect_sizes_to_report, standard_error_to_report])],
             axis=1)
 
         results_per_cohort.index = pd.MultiIndex.from_arrays(
-            [np.array(self.get_cohort_names())[indices[0]],
-             variant_names[indices[1]],
-             chromosomes[indices[1]],
-             phenotype_names[indices[2]]],
-            names=['cohort', 'variant', 'chromosome', 'phenotype'])
+            [np.array([cohort.study_name] * len(indices[1])),
+             variant_names[indices[0]],
+             phenotype_names[indices[1]]],
+            names=['cohort', 'variant_index', 'phenotype'])
 
         results_per_cohort = results_per_cohort.reset_index()
 
-        output_path = self.get_output_path(chunk, node, per_cohort=True)
+        results_per_cohort.columns = [col.decode('utf-8') for col in results_per_cohort.columns]
 
-        if self.output_type == "npy":
-            np.save(output_path, results_per_cohort)
-        elif self.output_type == "pkl":
-            results_per_cohort.to_pickle(output_path)
-        elif self.output_type == "parquet":
+        results_per_cohort['phenotype'] = results_per_cohort['phenotype'].str.decode('utf-8')
+        results_per_cohort['cohort'] = results_per_cohort['cohort'].str.decode('utf-8')
 
-            pyarrow_schema = pa.schema(
-                [("cohort", pa.string()),
-                 ("variant", pa.string()),
-                 ("chromosome", pa.int8()),
-                 ("phenotype", pa.string()),
-                 ("beta", pa.float64()),
-                 ("standard_error", pa.float64()),
-                 ("sample_size", pa.float64())])
+        for key, group in results_per_cohort.groupby(["phenotype".decode('utf-8'), "cohort".decode('utf-8')]):
+            phenotype = key[0]
+            cohort = key[1]
 
-            results_per_cohort.columns = [col.decode('utf-8') for col in results_per_cohort.columns]
+            output_path_group = os.path.join(
+                self.out, "cohort",
+                "cohort={}".format(cohort),
+                "phenotype={}".format(phenotype))
+            try:
+                os.makedirs(output_path_group)
+            except OSError:
+                pass
 
-            results_per_cohort['variant'] = results_per_cohort['variant'].str.decode('utf-8')
-            results_per_cohort['phenotype'] = results_per_cohort['phenotype'].str.decode('utf-8')
-            results_per_cohort['cohort'] = results_per_cohort['cohort'].str.decode('utf-8')
-
-            pq.write_to_dataset(
-                table=pa.Table.from_pandas(results_per_cohort, pyarrow_schema),
-                root_path=os.path.join(self.out, "cohort"),
-                partition_cols=["phenotype".decode('utf-8'), "cohort".decode('utf-8')])
-
-        elif self.output_type == "feather":
-
-            results_per_cohort.columns = [col.decode('utf-8') for col in results_per_cohort.columns]
-
-            results_per_cohort['variant'] = results_per_cohort['variant'].str.decode('utf-8')
-            results_per_cohort['phenotype'] = results_per_cohort['phenotype'].str.decode('utf-8')
-            results_per_cohort['cohort'] = results_per_cohort['cohort'].str.decode('utf-8')
-
-            for key, group in results_per_cohort.groupby(["phenotype".decode('utf-8'), "cohort".decode('utf-8')]):
-                phenotype = key[0]
-                cohort = key[1]
-
-                output_path_group = os.path.join(
-                    self.out, "cohort",
-                    "cohort={}".format(cohort),
-                    "phenotype={}".format(phenotype))
-                try:
-                    os.makedirs(output_path_group)
-                except OSError:
-                    pass
-
-                filename = os.path.join(output_path_group, "file_{}.feather".format(self.results_index))
-                ft.write_feather(
-                    group,
-                    filename)
+            filename = os.path.join(output_path_group, "file_{}.feather".format(self.results_index))
+            ft.write_feather(
+                group,
+                filename)
 
     def get_output_label(self, chunk, node, per_cohort=False):
         if chunk is None:
@@ -559,22 +558,21 @@ class ClassicMetaAnalyser:
                 # We start with an empty chunk...
                 ch = None
                 node = None
-                chromosomes = np.array([])
 
                 # Then we check whether or not we are working in an environment
                 # wherein analysis is split over multiple nodes.
 
                 # This determines how the current chunk should be obtained.
                 if mapper.cluster == 'n':
-                    variant_indices, variant_names, chromosomes = mapper.get(
-                        allowed_missingness_rate=allowed_missingness_rate, chromosomes=True)
+                    variant_indices, variant_names = mapper.get(
+                        allowed_missingness_rate=allowed_missingness_rate, chromosomes=False)
                 elif mapper.cluster == 'y':
                     ch = mapper.chunk_pop()
                     node = mapper.node[1]
                     if ch is None:
                         break
-                    variant_indices, variant_names, chromosomes = mapper.get(
-                        chunk_number=ch, allowed_missingness_rate=allowed_missingness_rate, chromosomes=True)
+                    variant_indices, variant_names = mapper.get(
+                        chunk_number=ch, allowed_missingness_rate=allowed_missingness_rate, chromosomes=False)
 
                 # Now we can check if we have looped through all genotype chunks...
                 if isinstance(variant_indices, type(None)):
@@ -590,7 +588,7 @@ class ClassicMetaAnalyser:
                 self._analyse_genotype_chunk(
                     variant_indices, variant_names, genotype,
                     phenotype, phenotype_names,
-                    ch, node, chromosomes)
+                    ch, node)
 
 
 class CohortAnalyser:
@@ -619,11 +617,12 @@ class CohortAnalyser:
     """
 
     def __init__(self, study_index, study_name, row_index,
-                 sample_size, covariate_indices=None,
+                 sample_size, selected_covariates=None,
                  maf_threshold=0.0,
                  a_test=None, b_cov=None, C=None, a_cov=None):
+        self._encoded_covariates = None
+        self._selected_covariates = selected_covariates
         self.partial_derivatives_phenotype_index = None
-        self._covariate_indices = covariate_indices
         self.unknown_dimension_size = 1
         self.sample_size = sample_size
         self._a_cov = a_cov
@@ -644,14 +643,16 @@ class CohortAnalyser:
         self._finalized = False
         self.maf_threshold = maf_threshold
 
-    def set_partial_derivatives(self, a_test, b_cov, C, a_cov):
+    def set_partial_derivatives(self, a_test, b_cov, C, a_cov, covariates):
         """
         Set partial derivatives.
+        :param covariates:
         """
         self._b_cov = b_cov
         self.C = C
         self._a_test = a_test
         self._a_cov = a_cov
+        self._encoded_covariates = ["_".join([self.study_name, covariate]) for covariate in covariates]
 
     def set_partial_derivatives_phenotype_index(self, meta_pard):
         """
@@ -839,11 +840,12 @@ class CohortAnalyser:
                 study_name=self.study_name,
                 study_index=self.study_index,
                 variant_indices=variant_indices)
+            covariate_names = meta_pard.get_covariate_names(self.study_name)
 
         print("Time to get PD {}s".format(t_pd.secs))
 
         # Add the partial derivatives for this cohort
-        self.set_partial_derivatives(a_test, b_cov, C, a_cov)
+        self.set_partial_derivatives(a_test, b_cov, C, a_cov, covariate_names)
         # Add the maf filter for this cohort
         self.set_observed_maf(meta_pard.minor_allele_frequencies_study(
             SNPs_index=variant_indices,
@@ -872,6 +874,8 @@ class CohortAnalyser:
 
             # If we have some phenotypes, we can continue.
             self._analyse(genotype, phenotype)
+
+        self._cleanup()
 
     def _analyse(self, genotype, phenotype):
 
@@ -961,7 +965,36 @@ class CohortAnalyser:
         it will also maintain the intercept thingy.
         :return:
         """
-        if self._covariate_indices is None:
-            return np.arange(self._a_cov.shape[0])
+        if self._selected_covariates is None:
+            raise ValueError(
+                'Covariate selection not present for cohort: {}'.format(
+                    self.study_name
+                ))
+            #return np.arange(self._a_cov.shape[0])
 
-        return np.insert(self._covariate_indices, obj=0, values=0, axis=0)
+        covariate_indices = np.where(np.in1d(self._encoded_covariates, self._selected_covariates))[0]
+
+        if len(covariate_indices) < len(self._selected_covariates):
+            missing_covariates = self._selected_covariates[~np.isin(self._selected_covariates,
+                                                                    self._encoded_covariates)]
+            raise ValueError(
+                'Cannot find all covariates for study: {}'
+                'Cannot find: {}'.format(
+                    self.study_name, ", ".join(missing_covariates)
+                ))
+
+        if np.isin(covariate_indices[0], 0):
+            return covariate_indices
+
+        return np.insert(covariate_indices, obj=0, values=0, axis=0)
+
+    def _cleanup(self):
+        self._b_cov = None
+        self.C = None
+        self._a_test = None
+        self._a_cov = None
+        self._encoded_covariates = None
+        self.a_singular = dict()
+        self.a_inv = None
+
+        gc.collect()

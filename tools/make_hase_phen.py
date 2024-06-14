@@ -35,7 +35,7 @@ for f in files:
     if f.split('.')[-1]!='npy':
         raise ValueError('In {} should be only nparrays, not {}'.format(args.i,f))
 
-    d=np.load(os.path.join(args.i,f))
+    d=np.load(os.path.join(args.i,f), allow_pickle=True)
     ch=f.split('_')[0].split('reg')[1]
     index=f.split('_')[1].split('.npy')[0]
     n,m=d.shape

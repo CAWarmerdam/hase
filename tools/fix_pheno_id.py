@@ -33,7 +33,7 @@ for i in os.listdir(pheno_path):
         os.symlink(os.path.join(pheno_path,i) , os.path.join(out_path,i)   )
         
 
-info_dic=np.load(os.path.join(pheno_path, 'info_dic.npy' )  ).item()
+info_dic=np.load(os.path.join(pheno_path, 'info_dic.npy' ), allow_pickle=True).item()
 
 df=pd.read_csv(df_path,header=None, sep=',')
 df.columns=['ID']

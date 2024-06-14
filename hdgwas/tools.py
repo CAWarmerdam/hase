@@ -150,7 +150,7 @@ class HaseAnalyser(Analyser):
 
         if self.file_number is not None:
             try:
-                d = np.load(os.path.join(self.result_path, '{}result.npy'.format(self.file_number))).item()
+                d = np.load(os.path.join(self.result_path, '{}result.npy'.format(self.file_number)), allow_pickle=True).item()
             except:
                 print("Can't read {}".format(i))
 
@@ -174,7 +174,7 @@ class HaseAnalyser(Analyser):
                 for i in files:
                     print(i)
                     try:
-                        d = np.load(i).item()
+                        d = np.load(i, allow_pickle=True).item()
                     except:
                         print("Can't read {}".format(i))
                         continue
@@ -537,12 +537,12 @@ class Mapper(object):
             if encode is not None:
                 self.encoded[i] = encode[j]
                 if encode[j] == 0:
-                    self.flip[i] = np.load(os.path.join(folder, 'flip_' + self.reference_name + '_' + i + '.npy'))
+                    self.flip[i] = np.load(os.path.join(folder, 'flip_' + self.reference_name + '_' + i + '.npy'), allow_pickle=True)
                 elif encode[j] == 1:
-                    flip = np.load(os.path.join(folder, 'flip_' + self.reference_name + '_' + i + '.npy'))
+                    flip = np.load(os.path.join(folder, 'flip_' + self.reference_name + '_' + i + '.npy'), allow_pickle=True)
                     self.flip[i] = np.ones(flip.shape[0])
             else:
-                self.flip[i] = np.load(os.path.join(folder, 'flip_' + self.reference_name + '_' + i + '.npy'))
+                self.flip[i] = np.load(os.path.join(folder, 'flip_' + self.reference_name + '_' + i + '.npy'), allow_pickle=True)
 
     # @timing
     def load(self, folder):
@@ -561,7 +561,7 @@ class Mapper(object):
         if len(keys) > 1:
             raise ValueError('There are more than one reference keys in folder {}'.format(folder))
 
-        self.keys = np.load(os.path.join(keys[0]))  # TODO (middle) not safety to load only one file
+        self.keys = np.load(os.path.join(keys[0]), allow_pickle=True)  # TODO (middle) not safety to load only one file
         self.n_keys = self.keys.shape[0]
 
         values = glob.glob(folder + 'values_*')
@@ -575,7 +575,7 @@ class Mapper(object):
         # Mapper files should always maintain the same order as the order of study names, so they stay aligned
         # with all other data structures.
         for j, i in enumerate(self.genotype_names):
-            self.values[:, j] = np.load(os.path.join(folder, 'values_' + self.reference_name + '_' + i + '.npy'))
+            self.values[:, j] = np.load(os.path.join(folder, 'values_' + self.reference_name + '_' + i + '.npy'), allow_pickle=True)
 
         if self.n_keys != self.values.shape[0]:
             raise ValueError(

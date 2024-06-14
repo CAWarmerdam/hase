@@ -20,18 +20,18 @@ def merge_PD(path, max_node, study_name):
     for i in range(1, max_node + 1):
         print 'node_{}'.format(i)
         if i == 1:
-            metadata = np.load(os.path.join(path, 'node_{}_{}_metadata.npy'.format(i, study_name))).item()
-            a_test = np.load(os.path.join(path, 'node_{}_{}_a_test.npy'.format(i, study_name)))
+            metadata = np.load(os.path.join(path, 'node_{}_{}_metadata.npy'.format(i, study_name)), allow_pickle=True).item()
+            a_test = np.load(os.path.join(path, 'node_{}_{}_a_test.npy'.format(i, study_name)), allow_pickle=True)
             if b4_flag:
-                b4 = np.load(os.path.join(path, 'node_{}_{}_b4.npy'.format(i, study_name)))
+                b4 = np.load(os.path.join(path, 'node_{}_{}_b4.npy'.format(i, study_name)), allow_pickle=True)
 
         else:
-            metadata_tmp = np.load((os.path.join(path, 'node_{}_{}_metadata.npy'.format(i, study_name)))).item()
-            a_test_tmp = np.load((os.path.join(path, 'node_{}_{}_a_test.npy'.format(i, study_name))))
+            metadata_tmp = np.load((os.path.join(path, 'node_{}_{}_metadata.npy'.format(i, study_name))), allow_pickle=True).item()
+            a_test_tmp = np.load((os.path.join(path, 'node_{}_{}_a_test.npy'.format(i, study_name))), allow_pickle=True)
             metadata['MAF'] = metadata['MAF'] + metadata_tmp['MAF']
             a_test = np.vstack((a_test, a_test_tmp))
             if b4_flag:
-                b4_tmp = np.load((os.path.join(path, 'node_{}_{}_b4.npy'.format(i, study_name))))
+                b4_tmp = np.load((os.path.join(path, 'node_{}_{}_b4.npy'.format(i, study_name))), allow_pickle=True)
                 b4 = np.vstack((b4, b4_tmp))
 
     np.save(os.path.join(path, study_name + '_a_test.npy'), a_test)

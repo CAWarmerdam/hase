@@ -39,7 +39,7 @@ HEAD += "* Erasmus MC, Rotterdam /  Department of Medical Informatics, Radiology
 HEAD += "* GNU General Public License v3\n"
 HEAD += "*********************************************************************\n"
 
-ANALYSE_OVER = "phenotypes_first"
+ANALYSE_OVER = "genotypes_first"
 
 def main(argv=None):
     if argv is None:
@@ -812,33 +812,27 @@ def main(argv=None):
 
                 # This determines how the current chunk should be obtained.
                 if mapper.cluster == 'n':
-                    variant_indices, keys, chromosomes = mapper.get(
-                        allowed_missingness_rate=args.max_missingness_rate, chromosomes=True)
+                    variant_indices, keys = mapper.get(
+                        allowed_missingness_rate=args.max_missingness_rate, chromosomes=False)
                 elif mapper.cluster == 'y':
                     ch = mapper.chunk_pop()
                     if ch is None:
                         break
-                    variant_indices, keys, chromosomes = mapper.get(
-                        chunk_number=ch, allowed_missingness_rate=args.max_missingness_rate, chromosomes=True)
+                    variant_indices, keys = mapper.get(
+                        chunk_number=ch, allowed_missingness_rate=args.max_missingness_rate, chromosomes=False)
 
                 # Now we can check if we have looped through all genotype chunks...
                 if isinstance(variant_indices, type(None)):
                     break
 
-                # And we can get the genotypes for this chunk...
-                if is_no_b4_present_in_partial_derivatives:
-                    with Timer() as t_g:
-                        genotype = merge_genotype(gen, variant_indices, mapper)
-                    print("Time to get G {}s".format(t_g.secs))
-
                 # Now analyse the genotype chunk
                 if mapper.cluster == 'y':
                     classic_meta_analyser.analyse_genotype_chunk(
-                        genotype, keys, variant_indices,
-                        chunk=ch, node=mapper.node[1], chromosomes=chromosomes)
+                        gen, keys, variant_indices,
+                        chunk=ch, node=mapper.node[1])
                 else:
                     classic_meta_analyser.analyse_genotype_chunk(
-                        genotype, keys, variant_indices, chromosomes=chromosomes)
+                        gen, keys, variant_indices)
 
 
     ################################### TO DO EVERYTHING IN ONE GO ##############################

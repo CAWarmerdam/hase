@@ -11,7 +11,8 @@ import pyarrow.feather as ft
 
 from hdgwas.hdregression import B4, \
     get_a_inverse_extended, hase_supporting_interactions, HASE
-from hdgwas.tools import Timer, HaseAnalyser, select_identifiers, merge_genotype
+from hdgwas.tools import Timer, HaseAnalyser, select_identifiers, merge_genotype, extract_genotypes_no_flip
+
 
 class HaseException(Exception):
     pass
@@ -89,7 +90,7 @@ class ClassicMetaAnalyser:
             cohort_list.append(cohort)
         return cohort_list
 
-    def analyse_genotype_chunk(self, genotype, variant_names, variant_indices,
+    def analyse_genotype_chunk(self, gen, variant_names, variant_indices,
                                chunk=None, node=None, chromosomes=None):
 
         for phenotype, phenotype_names, phenotype_indices in self.meta_phen:
@@ -102,10 +103,10 @@ class ClassicMetaAnalyser:
 
             self._analyse_genotype_chunk(
                 variant_indices, variant_names,
-                genotype, phenotype, phenotype_names,
+                gen, phenotype, phenotype_names,
                 chunk, node, chromosomes)
 
-    def _analyse_genotype_chunk(self, variant_indices, variant_names, genotype, phenotype, phenotype_names,
+    def _analyse_genotype_chunk(self, variant_indices, variant_names, gen, phenotype, phenotype_names,
                                 chunk=None, node=None, chromosomes=None):
 
         # Define matrices to do incremental meta-analysis
@@ -118,14 +119,15 @@ class ClassicMetaAnalyser:
         for cohort in self.cohort_list:
             # Run the analysis for this cohort
             cohort.analyse(variant_indices, variant_names,
-                           genotype, phenotype, self.meta_pard)
+                           gen, phenotype, self.meta_pard)
 
             self.save_results_per_cohort(cohort, variant_names, phenotype_names)
 
             # Perform incremental meta-analysis
             self.incremental_meta_analysis(
                 cohort, number_of_cohorts,
-                weighted_effect_sizes_squared_total, weighted_effect_sizes_total, weights_total)
+                weighted_effect_sizes_squared_total,
+                weighted_effect_sizes_total, weights_total)
 
             # Clear the per-cohort results
             cohort.analyser.t_stat = None
@@ -578,15 +580,9 @@ class ClassicMetaAnalyser:
                 if isinstance(variant_indices, type(None)):
                     break
 
-                # And we can get the genotypes for this chunk...
-                if is_no_b4_present_in_partial_derivatives:
-                    with Timer() as t_g:
-                        genotype = merge_genotype(gen, variant_indices, mapper)
-                    print("Time to get G {}s".format(t_g.secs))
-
                 # Now analyse the genotype chunk
                 self._analyse_genotype_chunk(
-                    variant_indices, variant_names, genotype,
+                    variant_indices, variant_names, gen,
                     phenotype, phenotype_names,
                     ch, node)
 
@@ -756,7 +752,8 @@ class CohortAnalyser:
         else:
             variant_filter = self.variant_indices != -1
 
-        filtered_genotype = genotype[np.ix_(variant_filter, self.sample_indices['genotype'])]
+        original_sample_indices = self.sample_indices['genotype_per_cohort']
+        filtered_genotype = genotype[np.ix_(variant_filter, original_sample_indices)]
 
         if genotype.shape[0] == 0:
             raise HaseException("No SNPs pass variant filters")
@@ -830,7 +827,10 @@ class CohortAnalyser:
         phenotype_names = self.phenotype_names[phenotype_filter]
         return phenotype_names
 
-    def analyse(self, variant_indices, variant_names, genotype, phenotype, meta_pard):
+    def analyse(self, variant_indices, variant_names, gen, phenotype, meta_pard):
+        genotype = extract_genotypes_no_flip(
+            gen[self.study_index],
+            variant_indices[self.study_index])
         print("Preparing cohort named '{}'".format(self.study_name))
         self.set_variant_names(variant_names)
         # Get the partial derivatives for each study
@@ -846,13 +846,14 @@ class CohortAnalyser:
 
         # Add the partial derivatives for this cohort
         self.set_partial_derivatives(a_test, b_cov, C, a_cov, covariate_names)
-        # Add the maf filter for this cohort
-        self.set_observed_maf(meta_pard.minor_allele_frequencies_study(
-            SNPs_index=variant_indices,
-            study_name=self.study_name,
-            study_index=self.study_index))
         self.set_variant_indices(variant_indices[self.study_index])
-        self.set_variant_filter(self.maf_filter())
+        # Add the maf filter for this cohort
+        if self.maf_threshold is not None and self.maf_threshold > 0:
+            self.set_observed_maf(meta_pard.minor_allele_frequencies_study(
+                SNPs_index=variant_indices,
+                study_name=self.study_name,
+                study_index=self.study_index))
+            self.set_variant_filter(self.maf_filter())
         # Apply filters on partial derivatives and calculate processed
         # data structures.
         self.finalize_partial_derivatives()

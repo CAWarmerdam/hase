@@ -1043,6 +1043,16 @@ def get_intersecting_individual_indices(datasets):
         intersection_indices = (identifier == intersection).all(-1)
         indices[key] = intersection_indices.argmax(axis=0)
 
+    indices['genotype_per_cohort'] = dict()
+
+    for study_index in range(len(datasets['genotype'])):
+        identifier = identifiers['genotype'][:, np.newaxis]
+        intersection_indices = (
+                identifier[identifier[:,0,1] == str(study_index)]
+                == intersection[intersection[:,1] == str(study_index)]
+        ).all(-1)
+        indices['genotype_per_cohort'][study_index] = intersection_indices.argmax(axis=0)
+
     print('There are {} common ids'.format(len(intersection)))
     # Could possibly save the results...
     return indices, intersection
@@ -1055,9 +1065,12 @@ def select_identifiers(study_index, row_index, intersection):
 
     # Get the identifiers from the datasets
     for key, indices in row_index.items():
-        indices_of_selected_samples[key] = indices[np.where(
-            intersection[:, 1] == str(study_index)
-        )]
+        if key == 'genotype_per_cohort':
+            indices_of_selected_samples[key] = indices[study_index]
+        else:
+            indices_of_selected_samples[key] = indices[np.where(
+                intersection[:, 1] == str(study_index)
+            )]
 
     return indices_of_selected_samples
 
@@ -1170,6 +1183,12 @@ def merge_genotype(genotype, variant_indices, mapper, flip_flag=True):
             a = b
 
         return gen
+
+
+def extract_genotypes_no_flip(genotype, variant_indices):
+    g = genotype.get(variant_indices, impute=False)
+    g[np.where(variant_indices == -1), :] = 0
+    return g
 
 
 # @timing

@@ -589,6 +589,7 @@ class MetaParData(object):
         keys = []
         if protocol is None:
             for i, k in enumerate(pd):
+                print(self.study_names[i])
                 self.covariates[k] = [n.split(self.study_names[i] + '_')[1] for n in k.folder._data.metadata['names']]
                 if i == 0:
                     self.phen_mapper.fill(k.folder._data.metadata['phenotype'], k.folder.name, reference=False)
@@ -1096,7 +1097,7 @@ class CSVFolder(Folder):
                     'Cant read {} file; default settings: index=None, header=True; sep=tab or space '.format(file))
 
             self._data = Data()
-            self._data.chunk_size = 1000
+            self._data.chunk_size = 2000
             self._data._data = df[df.columns[1:]].values
             self._data.id = np.array(df[df.columns[0]])
             if self._id is None:

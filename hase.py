@@ -714,7 +714,7 @@ def main(argv=None):
 
         meta_pard = MetaParData(partial_derivatives_folders, args.study_name,
                                 protocol=protocol,
-                                allowed_missingness_rate=args.max_missingness_rate,
+                                allowed_missingness_rate=1,
                                 match_covs=False)
         # Do nothing with cov order
 
@@ -733,7 +733,7 @@ def main(argv=None):
             meta_phen = MetaPhenotype(phen,
                                       include=args.ph_id_inc,
                                       exclude=args.ph_id_exc,
-                                      allowed_missingness_rate=args.max_missingness_rate)
+                                      allowed_missingness_rate=1)
 
         except ValueError as e:
             if e.message == "There is no common names between studies":
